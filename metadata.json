@@ -1,0 +1,10 @@
+{
+  "name": "Sensus Keluarga",
+  "description": "Aplikasi pendataan keluarga dan sosial multi-tahap (Wizard Form) dengan ekspor data CSV dan penyimpanan lokal.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
