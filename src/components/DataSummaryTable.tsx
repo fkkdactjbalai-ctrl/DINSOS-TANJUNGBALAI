@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   Search, FileSpreadsheet, Eye, Edit2, Trash2, Database, MapPin, Calendar, 
   HelpCircle, Sparkles, SlidersHorizontal, AlertCircle, FileText,
@@ -16,6 +16,7 @@ interface DataSummaryTableProps {
   onDelete: (id: string) => void;
   onLoadSeeds: () => void;
   onClearAll: () => void;
+  userRole?: 'admin' | 'pendata' | null;
   
   // Sync endpoints & variables
   syncUrl: string;
@@ -27,11 +28,13 @@ interface DataSummaryTableProps {
 }
 
 export default function DataSummaryTable({ 
-  surveys, onView, onEdit, onDelete, onLoadSeeds, onClearAll,
+  surveys, onView, onEdit, onDelete, onLoadSeeds, onClearAll, userRole,
   syncUrl, setSyncUrl, isAutoSync, setIsAutoSync, onSyncSurvey, onSyncAll
 }: DataSummaryTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterKecamatan, setFilterKecamatan] = useState('Semua');
+  const [filterKelurahan, setFilterKelurahan] = useState('Semua');
+  const [filterSyncStatus, setFilterSyncStatus] = useState('Semua');
 
   // Cloud Sync state variables
   const [isSyncPanelOpen, setIsSyncPanelOpen] = useState(false);
@@ -53,12 +56,32 @@ export default function DataSummaryTable({
       (s.namaPendata || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesKecamatan = filterKecamatan === 'Semua' || s.kecamatan === filterKecamatan;
+    
+    const matchesKelurahan = filterKelurahan === 'Semua' || s.kelurahan === filterKelurahan;
+    
+    let matchesSync = true;
+    if (filterSyncStatus === 'synced') matchesSync = !!s.synced;
+    if (filterSyncStatus === 'unsynced') matchesSync = !s.synced;
 
-    return matchesSearch && matchesKecamatan;
+    return matchesSearch && matchesKecamatan && matchesKelurahan && matchesSync;
   });
 
   // Extract unique subdistricts (kecamatan) for filter list
   const kecamantanList = ['Semua', ...Array.from(new Set(surveys.map(s => s.kecamatan).filter(Boolean)))];
+
+  // Extract unique villages (kelurahan) based on selected kecamatan
+  const kelurahanList = useMemo(() => {
+    const list = surveys
+      .filter(s => filterKecamatan === 'Semua' || s.kecamatan === filterKecamatan)
+      .map(s => s.kelurahan)
+      .filter(Boolean);
+    return ['Semua', ...Array.from(new Set(list))];
+  }, [surveys, filterKecamatan]);
+
+  const handleKecamatanChange = (val: string) => {
+    setFilterKecamatan(val);
+    setFilterKelurahan('Semua');
+  };
 
   const handleExport = () => {
     exportSurveysToCSV(filteredSurveys);
@@ -81,27 +104,39 @@ export default function DataSummaryTable({
           {surveys.length > 0 && (
             <>
               <button
+                id="btn-export-all-all-csv"
+                type="button"
+                onClick={() => exportSurveysToCSV(surveys)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-4 py-2.5 flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 cursor-pointer select-none"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Ekspor Semua Data ke CSV
+              </button>
+
+              <button
                 id="btn-export-csv"
                 type="button"
                 onClick={handleExport}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold px-4 py-2.5 flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/10 cursor-pointer select-none"
               >
                 <FileSpreadsheet className="h-4 w-4" />
-                Ekspor ke CSV (Excel)
+                Ekspor Hasil Saringan
               </button>
 
-              <button
-                id="btn-clear-database"
-                type="button"
-                onClick={() => {
-                  if (confirm('Apakah Anda yakin ingin menghapus seluruh basis data pendataan ini? Tindakan ini tidak bisa dibatalkan.')) {
-                    onClearAll();
-                  }
-                }}
-                className="bg-white hover:bg-red-50 border border-red-100 hover:border-red-200 text-red-650 text-red-600 rounded-xl text-xs font-semibold px-3 py-2.5 transition-all cursor-pointer select-none"
-              >
-                Kosongkan Database
-              </button>
+              {userRole !== 'pendata' && (
+                <button
+                  id="btn-clear-database"
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Apakah Anda yakin ingin menghapus seluruh basis data pendataan ini? Tindakan ini tidak bisa dibatalkan.')) {
+                      onClearAll();
+                    }
+                  }}
+                  className="bg-white hover:bg-red-50 border border-red-100 hover:border-red-200 text-red-650 text-red-600 rounded-xl text-xs font-semibold px-3 py-2.5 transition-all cursor-pointer select-none"
+                >
+                  Kosongkan Database
+                </button>
+              )}
             </>
           )}
 
@@ -262,38 +297,71 @@ export default function DataSummaryTable({
       </div>
 
       {/* Grid of Search, Filters, Stats */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
         {/* Search Input bar */}
         <div className="relative flex-1 max-w-md">
-          <span className="absolute left-3 top-3 text-slate-400">
+          <span className="absolute left-3 top-2.5 text-slate-400">
             <Search className="h-4 w-4" />
           </span>
           <input
             id="table-search"
             type="text"
-            placeholder="Cari berdasarkan No KK, Nama Responden, atau Pendata..."
+            placeholder="Cari KK, nama responden, atau pendata..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full text-xs p-3 pl-10 rounded-xl border border-slate-200 outline-hidden transition-colors focus:border-slate-400"
+            className="w-full text-xs p-2.5 pl-10 rounded-xl border border-slate-200 bg-white outline-hidden transition-colors focus:border-slate-400"
           />
         </div>
 
-        {/* Filter dropdown and reset info */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Saring Kecamatan:
+        {/* Filter Selection Panel */}
+        <div className="flex flex-wrap items-center gap-3.5">
+          {/* Kecamatan Saring */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-indigo-600" />
+              <span>Kecamatan:</span>
+            </div>
+            <select
+              id="table-filter-kecamatan"
+              value={filterKecamatan}
+              onChange={(e) => handleKecamatanChange(e.target.value)}
+              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              {kecamantanList.map((kec) => (
+                <option key={kec} value={kec}>{kec}</option>
+              ))}
+            </select>
           </div>
-          <select
-            id="table-filter-kecamatan"
-            value={filterKecamatan}
-            onChange={(e) => setFilterKecamatan(e.target.value)}
-            className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700"
-          >
-            {kecamantanList.map((kec) => (
-              <option key={kec} value={kec}>{kec}</option>
-            ))}
-          </select>
+
+          {/* Kelurahan Saring */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Kelurahan:</span>
+            <select
+              id="table-filter-kelurahan"
+              value={filterKelurahan}
+              onChange={(e) => setFilterKelurahan(e.target.value)}
+              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              {kelurahanList.map((kel) => (
+                <option key={kel} value={kel}>{kel}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Sinkronisasi Saring */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Status Sinkronisasi:</span>
+            <select
+              id="table-filter-sync"
+              value={filterSyncStatus}
+              onChange={(e) => setFilterSyncStatus(e.target.value)}
+              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="Semua">Semua Status</option>
+              <option value="synced">Tersinkronisasi (SYNC)</option>
+              <option value="unsynced">Lokal Saja (LOKAL)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -434,18 +502,20 @@ export default function DataSummaryTable({
                         <Edit2 className="h-4 w-4" />
                       </button>
 
-                      <button
-                        id={`btn-delete-${survey.id}`}
-                        onClick={() => {
-                          if (confirm(`Apakah Anda yakin ingin membuang data KK ${survey.noKK} atas nama ${survey.namaResponden}?`)) {
-                            onDelete(survey.id);
-                          }
-                        }}
-                        title="Hapus Rekaman"
-                        className="p-2 text-slate-450 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {userRole !== 'pendata' && (
+                        <button
+                          id={`btn-delete-${survey.id}`}
+                          onClick={() => {
+                            if (confirm(`Apakah Anda yakin ingin membuang data KK ${survey.noKK} atas nama ${survey.namaResponden}?`)) {
+                              onDelete(survey.id);
+                            }
+                          }}
+                          title="Hapus Rekaman"
+                          className="p-2 text-slate-450 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

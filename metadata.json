@@ -2,6 +2,7 @@
   "name": "Sensus Keluarga",
   "description": "Aplikasi pendataan keluarga dan sosial multi-tahap (Wizard Form) dengan ekspor data CSV dan penyimpanan lokal.",
   "requestFramePermissions": [
+    "geolocation",
     "camera"
   ],
   "majorCapabilities": [

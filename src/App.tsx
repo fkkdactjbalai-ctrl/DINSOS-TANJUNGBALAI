@@ -1,18 +1,34 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database } from 'lucide-react';
+import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database, LogOut, ShieldAlert } from 'lucide-react';
 import { SurveyData } from './types';
 import Header from './components/Header';
 import SurveyWizardForm from './components/SurveyWizardForm';
 import DataSummaryTable from './components/DataSummaryTable';
 import DetailModal from './components/DetailModal';
+import GPSDistributionMap from './components/GPSDistributionMap';
 import { seedSurveys, emptySurvey } from './data/options';
 import { sendSurveyToGoogleAppsScript } from './utils/syncService';
+import LoginScreen from './components/LoginScreen';
 
 export default function App() {
+  const [userRole, setUserRole] = useState<'admin' | 'pendata' | null>(() => {
+    return localStorage.getItem('dtsen_role') as 'admin' | 'pendata' | null;
+  });
   const [surveys, setSurveys] = useState<SurveyData[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<SurveyData | null>(null);
   const [editingSurvey, setEditingSurvey] = useState<SurveyData | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'danger' } | null>(null);
+
+  const handleLoginSuccess = (role: 'admin' | 'pendata') => {
+    localStorage.setItem('dtsen_role', role);
+    setUserRole(role);
+    showToast(`Berhasil masuk sebagai ${role === 'admin' ? 'Administrator' : 'Petugas Pendata'}!`, 'success');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('dtsen_role');
+    setUserRole(null);
+  };
 
   const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec';
   const [syncUrl, setSyncUrl] = useState(() => {
@@ -207,6 +223,10 @@ export default function App() {
 
   // Delete a survey from history
   const handleDeleteSurvey = (id: string) => {
+    if (userRole === 'pendata') {
+      showToast('Aksi ditolak: Petugas Pendata tidak diperbolehkan menghapus data!', 'danger');
+      return;
+    }
     const surveyToDelete = surveys.find(s => s.id === id);
     const updated = surveys.filter(s => s.id !== id);
     saveToLocalStorage(updated);
@@ -231,12 +251,35 @@ export default function App() {
     showToast('Seluruh data DTSEN di LocalStorage berhasil dikosongkan.', 'danger');
   };
 
+  if (!userRole) {
+    return (
+      <div className="min-h-screen bg-slate-50/50 flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900 font-sans">
+        {toastMessage && (
+          <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-xl flex items-center gap-3 max-w-sm animate-bounce text-xs font-semibold ${
+            toastMessage.type === 'success' 
+              ? 'bg-indigo-900 text-indigo-50 border border-indigo-750' 
+              : 'bg-red-800 text-red-50 border border-red-750'
+          }`}>
+            <BookmarkCheck className="h-4 w-4 shrink-0" />
+            <span>{toastMessage.text}</span>
+          </div>
+        )}
+        <div className="flex-1 flex items-center justify-center">
+          <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        </div>
+        <footer className="py-6 text-center text-[11px] text-slate-400 font-medium">
+          © 2026 Pemerintah Kota Tanjungbalai - Dinas Kependudukan &amp; Sosial
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/70 flex flex-col text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-16">
       
       {/* Dynamic Toast Alert Bar */}
       {toastMessage && (
-        <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-xl flex items-center gap-3 max-w-sm animate-bounce text-xs font-semibold ${
+        <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-xl flex items-center gap-3 max-w-sm text-xs font-semibold ${
           toastMessage.type === 'success' 
             ? 'bg-indigo-800 text-indigo-50 border border-indigo-700' 
             : toastMessage.type === 'info' 
@@ -255,7 +298,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-12">
         
         {/* Welcome and guidelines section */}
-        <div className="w-full bg-linear-to-r from-indigo-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md">
+        <div className="w-full bg-linear-to-r from-indigo-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           {/* Background graphic touch */}
           <div className="absolute right-0 bottom-0 opacity-10 select-none pointer-events-none transform translate-y-12 translate-x-12 scale-150">
             <Database className="h-60 w-60" />
@@ -274,18 +317,47 @@ export default function App() {
             </p>
             <div className="flex flex-wrap gap-x-5 gap-y-1 pt-2 font-mono text-[10px] text-indigo-200">
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                 Autosave Lokal
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                 Kalkulasi Umur Otomatis
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                 Live WebRTC snapshot
               </span>
             </div>
+          </div>
+
+          {/* User information & Logout actions */}
+          <div className="relative z-10 shrink-0 bg-white/10 backdrop-blur-xs p-5 rounded-2xl border border-white/15 space-y-4 w-full md:max-w-xs">
+            <div className="space-y-1">
+              <p className="text-[10px] opacity-70 uppercase tracking-wider font-semibold text-indigo-300">Sesi Aktif</p>
+              <div className="text-xs font-bold flex items-center gap-2 text-indigo-100">
+                <span className={`inline-block h-2.5 w-2.5 rounded-full animate-pulse ${userRole === 'admin' ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
+                <span>{userRole === 'admin' ? 'Administrator (Full Access)' : 'Petugas Pendata (Akses Lapangan)'}</span>
+              </div>
+            </div>
+            
+            {userRole === 'pendata' && (
+              <div className="text-[10px] text-indigo-200 leading-relaxed bg-black/20 p-2.5 rounded-xl border border-white/5 space-y-1">
+                <p className="font-bold text-amber-300 flex items-center gap-1">
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Keamanan Data Aktif:
+                </p>
+                <p>Database histori aktif untuk pemantauan dan pengeditan, namun fungsi penghapusan dinonaktifkan demi keselamatan data.</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleLogout}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-950/40 hover:bg-rose-900/80 text-indigo-200 hover:text-white font-bold text-[10.5px] uppercase cursor-pointer select-none border border-white/10 hover:border-rose-800 transition-all flex items-center justify-center gap-1.5 shadow-xs"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Keluar Sesi
+            </button>
           </div>
         </div>
 
@@ -325,12 +397,21 @@ export default function App() {
             onDelete={handleDeleteSurvey}
             onLoadSeeds={handleLoadSeedData}
             onClearAll={handleClearAll}
+            userRole={userRole}
             syncUrl={syncUrl}
             setSyncUrl={updateSyncUrl}
             isAutoSync={isAutoSync}
             setIsAutoSync={updateAutoSync}
             onSyncSurvey={handleSyncSurvey}
             onSyncAll={handleSyncAll}
+          />
+        </section>
+
+        {/* Peta Sebaran Georujukan Spasial Koordinat GPS Sensus */}
+        <section id="spatial-map-section" className="pt-4 non-printable">
+          <GPSDistributionMap 
+            surveys={surveys}
+            onViewSurvey={setSelectedSurvey}
           />
         </section>
 

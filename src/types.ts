@@ -87,6 +87,10 @@ export interface SurveyData {
   fotoRumahDepan: string;
   fotoRumahDalam: string;
 
+  // New Geolocation Coordinates for direct mapping/charts
+  latitude?: string;
+  longitude?: string;
+
   // Sync details for Google Sheets / Apps Script
   synced?: boolean;
   syncedAt?: string;

@@ -28,40 +28,50 @@ export const BUKTI_KEPEMILIKAN_TANAH = [
 ];
 
 export const JENIS_LANTAI_TERLUAS = [
-  'Marmer / Granit / Ubin Keramik',
-  'Semen / Tegel / Plesteran',
-  'Kayu / Papan / Parquet',
-  'Anyaman Bambu',
-  'Tanah',
-  'Lainnya'
+  'MARMET/GRANIT',
+  'KERAMIK',
+  'PARKET/VINIL/KARPET',
+  'UBIN/TEGEL/TERASO',
+  'KAYU/PAPAN',
+  'SEMEN/BATAMERAH',
+  'BAMBU',
+  'TANAH',
+  'LAINNYA'
 ];
 
 export const JENIS_DINDING_TERLUAS = [
-  'Tembok Beton / Semen Plesteran',
-  'Kayu / Papan Berkualitas',
-  'Seng / Spandek',
-  'Bambu / Anyaman / Gedek',
-  'Lainnya'
+  'TEMBOK',
+  'PLESTERAN ANYAMAN BAMBU',
+  'KAYU/PAPAN/GYPSUM/GRC/CALCIBOARD',
+  'ANYAMAN BAMBU',
+  'BATANG KAYU',
+  'BAMBU',
+  'LAINNYA'
 ];
 
 export const JENIS_ATAP_TERLUAS = [
-  'Genteng Beton / Keramik / Tanah Liat',
-  'Seng / Spandek',
-  'Asbes',
-  'Beton / Dek Semen',
-  'Rumbia / Jerami / Bambu',
-  'Lainnya'
+  'BETON',
+  'GENTENG',
+  'SENG',
+  'ASBES',
+  'BAMBU',
+  'KAYU/SIRAP',
+  'JERAMI/IJUK/DAUN-DAUNAN/RUMBIA',
+  'LAINNYA'
 ];
 
 export const SUMBER_AIR_MINUM = [
-  'Air Kemasan Bermerk / Depot Isi Ulang',
-  'Air Ledeng / PDAM',
-  'Sumur Bor / Pompa Terlindung',
-  'Sumur Gali Terlindung',
-  'Sumur Tak Terlindung / Sungai / Danau',
-  'Mata Air Terlindung',
-  'Air Hujan',
-  'Lainnya'
+  'AIR KEMASAN BERMERK',
+  'AIR ISI ULANG',
+  'LEDING',
+  'SUMUR BOR/POMPA',
+  'SUMUR TERLINDUNG',
+  'SUMUR TAK TERLINDUNG',
+  'MATA AIR TERLINDUNG',
+  'MATA AIR TAK TERLINDUNG',
+  'AIR PERMUKAAN (SUNGAI/DANAU/WADUK/KOLAM/IRIGASI)',
+  'AIR HUJAN',
+  'DAN LAINNYA'
 ];
 
 export const JARAK_AIR_MINUM = [
@@ -71,12 +81,10 @@ export const JARAK_AIR_MINUM = [
 ];
 
 export const SUMBER_PENERANGAN = [
-  'Listrik PLN dengan Meteran',
-  'Listrik PLN tanpa Meteran (Menumpang)',
-  'Listrik Non-PLN (Swadaya / Solar Panel)',
-  'Genset Mandiri',
-  'Pelita / Obor / Minyak Tanah / Lilin',
-  'Lainnya'
+  'LISTRIK PLN DENGAN METERAN',
+  'LISTRIK PLN TANPA METERAN',
+  'LISTRIK NON-PLN',
+  'DAN BUKAN LISTRIK'
 ];
 
 export const DAYA_LISTRIK = [
@@ -89,13 +97,18 @@ export const DAYA_LISTRIK = [
 ];
 
 export const BAHAN_BAKAR_MEMASAK = [
-  'Gas LPG 3 Kg (Subsidi)',
-  'Gas LPG > 3 Kg / Bright Gas',
-  'Biogas / Gas Alam',
-  'Minyak Tanah',
-  'Listrik / Kompor Induksi',
-  'Kayu Bakar / Arang',
-  'Lainnya / Tidak Memasak'
+  'LISTRIK',
+  'GAS ELPIJI 5,5 KG',
+  'GAS ELPIJI 12 KG',
+  'GAS ELPIJI 3 KG',
+  'GAS KOTA/METERAN PGN',
+  'BIOGAS',
+  'MINYAK TANAH',
+  'BRIKET',
+  'ARANG',
+  'KAYU BAKAR',
+  'LAINNYA',
+  'DAN TIDAK MEMASAK DIRUMAH'
 ];
 
 export const FASILITAS_BAB = [
@@ -122,10 +135,12 @@ export const PEMBUANGAN_AKHIR_TINJA = [
 ];
 
 export const KETERANGAN_KEBERADAAN = [
-  'Tinggal di Rumah / Menetap',
-  'Tinggal di Luar Kota (Sekolah/Kerja)',
-  'Meninggal Dunia',
-  'Lainnya'
+  'TINGGAL BERSAMA KELUARGA',
+  'MENINGGAL',
+  'TIDAK TINGGAL BERSAMA KELUARGA / PINDAH KEWILAYAH (DAERAH) LAIN DI INDONESIA',
+  'TIDAK TINGGAL BERSAMA KELUARGA/PINDAH KELUAR NEGERI',
+  'ANGGOTA KELUARGA BARU',
+  'DAN TIDAK DITEMUKAN'
 ];
 
 export const STATUS_PERKAWINAN = [
@@ -351,7 +366,7 @@ export const emptyFamilyMember = (): FamilyMember => ({
   noUrut: 1,
   nama: '',
   nik: '',
-  keteranganKeberadaan: 'Tinggal di Rumah / Menetap',
+  keteranganKeberadaan: 'TINGGAL BERSAMA KELUARGA',
   jenisKelamin: 'Laki-laki',
   tanggalLahir: '',
   umur: 0,
@@ -393,15 +408,15 @@ export const emptySurvey = (): SurveyData => ({
   statusKepemilikanRumah: 'Milik Sendiri',
   buktiKepemilikanTanah: 'Sertifikat Hak Milik (SHM)',
   luasLantai: 60,
-  jenisLantai: 'Marmer / Granit / Ubin Keramik',
-  jenisDinding: 'Tembok Beton / Semen Plesteran',
-  jenisAtap: 'Genteng Beton / Keramik / Tanah Liat',
-  sumberAirMinum: 'Air Ledeng / PDAM',
+  jenisLantai: 'KERAMIK',
+  jenisDinding: 'TEMBOK',
+  jenisAtap: 'GENTENG',
+  sumberAirMinum: 'LEDING',
   jarakAirMinum: 'Di dalam rumah / Terintegrasi',
-  sumberPenerangan: 'Listrik PLN dengan Meteran',
+  sumberPenerangan: 'LISTRIK PLN DENGAN METERAN',
   dayaListrik: '900 VA',
   noMeteranPelanggan: '',
-  bahanBakarMemasak: 'Gas LPG 3 Kg (Subsidi)',
+  bahanBakarMemasak: 'GAS ELPIJI 3 KG',
   fasilitasBab: 'Milik Sendiri (Jamban Pribadi)',
   jenisKloset: 'Leher Angsa',
   pembuanganAkhirTinja: 'Tangki Septik (Septic Tank) Terlindungi',
@@ -420,7 +435,9 @@ export const emptySurvey = (): SurveyData => ({
   catatan: '',
   fotoKK: '',
   fotoRumahDepan: '',
-  fotoRumahDalam: ''
+  fotoRumahDalam: '',
+  latitude: '',
+  longitude: ''
 });
 
 // A complete sample / dummy survey to speed up user testing!
@@ -434,18 +451,20 @@ export const seedSurveys: SurveyData[] = [
     kecamatan: 'Kecamatan Datuk Bandar',
     kelurahan: 'Sijambi',
     alamat: 'Jl. Jend. Sudirman No. 45 RT 02/RW 04, Kel. Sijambi, Kec. Datuk Bandar, Tg. Balai',
+    latitude: '2.964210',
+    longitude: '99.801240',
     statusKepemilikanRumah: 'Milik Sendiri',
     buktiKepemilikanTanah: 'Sertifikat Hak Milik (SHM)',
     luasLantai: 72,
-    jenisLantai: 'Marmer / Granit / Ubin Keramik',
-    jenisDinding: 'Tembok Beton / Semen Plesteran',
-    jenisAtap: 'Genteng Beton / Keramik / Tanah Liat',
-    sumberAirMinum: 'Air Ledeng / PDAM',
+    jenisLantai: 'MARMET/GRANIT',
+    jenisDinding: 'TEMBOK',
+    jenisAtap: 'GENTENG',
+    sumberAirMinum: 'LEDING',
     jarakAirMinum: 'Di dalam rumah / Terintegrasi',
-    sumberPenerangan: 'Listrik PLN dengan Meteran',
+    sumberPenerangan: 'LISTRIK PLN DENGAN METERAN',
     dayaListrik: '1300 VA',
     noMeteranPelanggan: '840139942001',
-    bahanBakarMemasak: 'Gas LPG 3 Kg (Subsidi)',
+    bahanBakarMemasak: 'GAS ELPIJI 3 KG',
     fasilitasBab: 'Milik Sendiri (Jamban Pribadi)',
     jenisKloset: 'Leher Angsa',
     pembuanganAkhirTinja: 'Tangki Septik (Septic Tank) Terlindungi',
@@ -455,7 +474,7 @@ export const seedSurveys: SurveyData[] = [
         noUrut: 1,
         nama: 'Ahmad Hermawan',
         nik: '3273151204800003',
-        keteranganKeberadaan: 'Tinggal di Rumah / Menetap',
+        keteranganKeberadaan: 'TINGGAL BERSAMA KELUARGA',
         jenisKelamin: 'Laki-laki',
         tanggalLahir: '1980-04-12',
         umur: 46,
@@ -488,7 +507,7 @@ export const seedSurveys: SurveyData[] = [
         noUrut: 2,
         nama: 'Aminah Kartini',
         nik: '3273151806850022',
-        keteranganKeberadaan: 'Tinggal di Rumah / Menetap',
+        keteranganKeberadaan: 'TINGGAL BERSAMA KELUARGA',
         jenisKelamin: 'Perempuan',
         tanggalLahir: '1985-06-18',
         umur: 40,
@@ -521,7 +540,7 @@ export const seedSurveys: SurveyData[] = [
         noUrut: 3,
         nama: 'Rizky Ramadhan',
         nik: '3273152410100025',
-        keteranganKeberadaan: 'Tinggal di Rumah / Menetap',
+        keteranganKeberadaan: 'TINGGAL BERSAMA KELUARGA',
         jenisKelamin: 'Laki-laki',
         tanggalLahir: '2010-10-24',
         umur: 15,
@@ -575,18 +594,20 @@ export const seedSurveys: SurveyData[] = [
     kecamatan: 'Kecamatan Sei Tualang Raso',
     kelurahan: 'Sei Raja',
     alamat: 'Kampung Suka Makmur RT 05/RW 03, Kel. Sei Raja, Kec. Sei Tualang Raso, Tg. Balai',
+    latitude: '2.981840',
+    longitude: '99.815330',
     statusKepemilikanRumah: 'Kontrak / Sewa',
     buktiKepemilikanTanah: 'Tidak Ada / Menumpang',
     luasLantai: 45,
-    jenisLantai: 'Semen / Tegel / Plesteran',
-    jenisDinding: 'Tembok Beton / Semen Plesteran',
-    jenisAtap: 'Seng / Spandek',
-    sumberAirMinum: 'Air Kemasan Bermerk / Depot Isi Ulang',
+    jenisLantai: 'SEMEN/BATAMERAH',
+    jenisDinding: 'TEMBOK',
+    jenisAtap: 'SENG',
+    sumberAirMinum: 'AIR KEMASAN BERMERK',
     jarakAirMinum: 'Kurang dari 10 meter',
-    sumberPenerangan: 'Listrik PLN dengan Meteran',
+    sumberPenerangan: 'LISTRIK PLN DENGAN METERAN',
     dayaListrik: '450 VA',
     noMeteranPelanggan: '840156711905',
-    bahanBakarMemasak: 'Gas LPG 3 Kg (Subsidi)',
+    bahanBakarMemasak: 'GAS ELPIJI 3 KG',
     fasilitasBab: 'Milik Bersama (Dengan Tetangga/Keluarga Lain)',
     jenisKloset: 'Leher Angsa',
     pembuanganAkhirTinja: 'Lubang Tanah',
@@ -596,7 +617,7 @@ export const seedSurveys: SurveyData[] = [
         noUrut: 1,
         nama: 'Siti Rahmawati',
         nik: '3273154812830005',
-        keteranganKeberadaan: 'Tinggal di Rumah / Menetap',
+        keteranganKeberadaan: 'TINGGAL BERSAMA KELUARGA',
         jenisKelamin: 'Perempuan',
         tanggalLahir: '1983-12-08',
         umur: 42,
@@ -629,7 +650,7 @@ export const seedSurveys: SurveyData[] = [
         noUrut: 2,
         nama: 'Aditya Pratama',
         nik: '3273151505220011',
-        keteranganKeberadaan: 'Tinggal di Rumah / Menetap',
+        keteranganKeberadaan: 'TINGGAL BERSAMA KELUARGA',
         jenisKelamin: 'Laki-laki',
         tanggalLahir: '2022-05-15',
         umur: 4,

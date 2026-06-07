@@ -69,6 +69,17 @@ export default function DetailModal({ survey, onClose }: DetailModalProps) {
                   {survey.alamat || '-'}
                 </span>
               </div>
+              {survey.latitude && survey.longitude && (
+                <div className="space-y-1 md:col-span-2 lg:col-span-3">
+                  <span className="text-[11px] text-slate-400 block uppercase font-mono">Koordinat Lokasi GPS (Stempel Geotag)</span>
+                  <div className="text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100/80 p-2 rounded-lg inline-flex items-center gap-1.5 font-mono">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 block animate-pulse" />
+                    <span>LATITUDE: {survey.latitude}</span>
+                    <span className="text-emerald-400">|</span>
+                    <span>LONGITUDE: {survey.longitude}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
