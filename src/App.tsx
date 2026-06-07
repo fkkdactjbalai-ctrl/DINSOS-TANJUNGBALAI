@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database, LogOut, ShieldAlert } from 'lucide-react';
 import { SurveyData } from './types';
 import Header from './components/Header';
@@ -9,6 +9,8 @@ import GPSDistributionMap from './components/GPSDistributionMap';
 import { seedSurveys, emptySurvey } from './data/options';
 import { sendSurveyToGoogleAppsScript } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
+import VillageDataChart from './components/VillageDataChart';
+import QuickStats from './components/QuickStats';
 
 export default function App() {
   const [userRole, setUserRole] = useState<'admin' | 'pendata' | null>(() => {
@@ -17,7 +19,13 @@ export default function App() {
   const [surveys, setSurveys] = useState<SurveyData[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<SurveyData | null>(null);
   const [editingSurvey, setEditingSurvey] = useState<SurveyData | null>(null);
+  const [autoPrintActive, setAutoPrintActive] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'danger' } | null>(null);
+
+  const handlePrint = (survey: SurveyData) => {
+    setSelectedSurvey(survey);
+    setAutoPrintActive(true);
+  };
 
   const handleLoginSuccess = (role: 'admin' | 'pendata') => {
     localStorage.setItem('dtsen_role', role);
@@ -77,6 +85,52 @@ export default function App() {
       setToastMessage(null);
     }, 4500);
   };
+
+  // Automatic background synchronization for all unsynced surveys
+  const syncingInProgressRef = useRef<Set<string>>(new Set());
+  
+  useEffect(() => {
+    if (!syncUrl || !isAutoSync) return;
+
+    const unsynced = surveys.filter(s => !s.synced);
+    if (unsynced.length === 0) return;
+
+    // Filter to only those not already in progress
+    const toStart = unsynced.filter(s => !syncingInProgressRef.current.has(s.id));
+    if (toStart.length === 0) return;
+
+    // To prevent rapid successive firings, wait 1.5 seconds
+    const timer = setTimeout(() => {
+      toStart.forEach(async (s) => {
+        // Mark as in-progress
+        syncingInProgressRef.current.add(s.id);
+        
+        try {
+          const res = await sendSurveyToGoogleAppsScript(syncUrl, s);
+          if (res.success) {
+            setSurveys(prev => {
+              const updated = prev.map(item => {
+                if (item.id === s.id) {
+                  return { ...item, synced: true, syncedAt: new Date().toISOString() };
+                }
+                return item;
+              });
+              localStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
+              return updated;
+            });
+            showToast(`Sinkronisasi latar otomatis sukses untuk KK ${s.noKK}!`, 'success');
+          }
+        } catch (err) {
+          console.error(`Gagal sinkron latar KK ${s.noKK}:`, err);
+        } finally {
+          // Remove from in-progress so it can retry later if failed
+          syncingInProgressRef.current.delete(s.id);
+        }
+      });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [surveys, syncUrl, isAutoSync]);
 
   // Helper to save surveys list to LocalStorage
   const saveToLocalStorage = (updatedList: SurveyData[]) => {
@@ -389,12 +443,14 @@ export default function App() {
         </section>
 
         {/* Data summary table database */}
-        <section id="database-section" className="pt-2">
+        <section id="database-section" className="pt-2 space-y-4">
+          <QuickStats surveys={surveys} />
           <DataSummaryTable 
             surveys={surveys}
             onView={setSelectedSurvey}
             onEdit={handleEditTrigger}
             onDelete={handleDeleteSurvey}
+            onPrint={handlePrint}
             onLoadSeeds={handleLoadSeedData}
             onClearAll={handleClearAll}
             userRole={userRole}
@@ -405,6 +461,11 @@ export default function App() {
             onSyncSurvey={handleSyncSurvey}
             onSyncAll={handleSyncAll}
           />
+        </section>
+
+        {/* Visualisasi data Recharts sebaran KK per kelurahan */}
+        <section id="chart-section" className="pt-2">
+          <VillageDataChart surveys={surveys} />
         </section>
 
         {/* Peta Sebaran Georujukan Spasial Koordinat GPS Sensus */}
@@ -431,7 +492,12 @@ export default function App() {
       {/* DTSEN Record Detail Modal Popup */}
       <DetailModal 
         survey={selectedSurvey} 
-        onClose={() => setSelectedSurvey(null)} 
+        onClose={() => {
+          setSelectedSurvey(null);
+          setAutoPrintActive(false);
+        }} 
+        autoPrint={autoPrintActive}
+        onPrinted={() => setAutoPrintActive(false)}
       />
     </div>
   );

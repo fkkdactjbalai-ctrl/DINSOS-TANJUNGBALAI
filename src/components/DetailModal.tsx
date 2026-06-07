@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X, Printer, Phone, Calendar, User, Eye, Download, Users, FileText } from 'lucide-react';
 import { SurveyData } from '../types';
 import { formatRupiah } from '../utils/csvExport';
@@ -5,9 +6,21 @@ import { formatRupiah } from '../utils/csvExport';
 interface DetailModalProps {
   survey: SurveyData | null;
   onClose: () => void;
+  autoPrint?: boolean;
+  onPrinted?: () => void;
 }
 
-export default function DetailModal({ survey, onClose }: DetailModalProps) {
+export default function DetailModal({ survey, onClose, autoPrint, onPrinted }: DetailModalProps) {
+  useEffect(() => {
+    if (autoPrint && survey) {
+      const timer = setTimeout(() => {
+        window.print();
+        if (onPrinted) onPrinted();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrint, survey, onPrinted]);
+
   if (!survey) return null;
 
   return (
@@ -46,6 +59,17 @@ export default function DetailModal({ survey, onClose }: DetailModalProps) {
               <div className="space-y-1">
                 <span className="text-[11px] text-slate-400 block uppercase font-mono">Nama Pendata / Petugas</span>
                 <span className="text-sm font-semibold text-slate-800">{survey.namaPendata || '-'}</span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[11px] text-slate-400 block uppercase font-mono">Status Pendataan</span>
+                <span className={`inline-flex items-center text-xs font-extrabold px-2.5 py-0.5 rounded-full border ${
+                  survey.statusPendataan === 'Bayi Baru Lahir (BBL)' ? 'bg-sky-50 text-sky-800 border-sky-100' :
+                  survey.statusPendataan === 'Pembaharuan Desil' ? 'bg-amber-50 text-amber-800 border-amber-100' :
+                  survey.statusPendataan === 'Pindah Wilayah' ? 'bg-purple-50 text-purple-800 border-purple-100' :
+                  'bg-indigo-50 text-indigo-800 border-indigo-100'
+                }`}>
+                  {survey.statusPendataan || 'Usulan Baru'}
+                </span>
               </div>
               <div className="space-y-1">
                 <span className="text-[11px] text-slate-400 block uppercase font-mono">Nomor Kartu Keluarga</span>
@@ -313,7 +337,7 @@ export default function DetailModal({ survey, onClose }: DetailModalProps) {
                   <div className="flex flex-wrap gap-1">
                     {survey.programBantuan?.map((p, idx) => (
                       <span key={idx} className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-medium border border-slate-100">
-                        {p}
+                        {p === 'Lainnya' && survey.programBantuanLainnya ? `Lainnya: ${survey.programBantuanLainnya}` : p}
                       </span>
                     )) || 'Tidak Ada'}
                   </div>

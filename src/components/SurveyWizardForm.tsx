@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, Home, Users, BookOpen, AlertCircle, Sparkles, Check, ChevronLeft, 
   ChevronRight, Plus, Trash, Camera, Upload, Coins, CheckCircle2, Award, Info, RefreshCw, MapPin, X
@@ -950,8 +951,17 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
           </div>
         )}
 
-        {/* SECTION 1: DATA PETUGAS & LOKASI */}
-        {currentSection === 0 && (
+        {/* Animated Slide-in Step transitions */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentSection}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            {/* SECTION 1: DATA PETUGAS & LOKASI */}
+            {currentSection === 0 && (
           <div className="space-y-6">
             <h3 className="text-md font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
               <span className="h-4 w-1 bg-indigo-600 rounded"></span>
@@ -972,6 +982,23 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
                   className="w-full text-sm p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-hidden transition-colors"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-705 mb-2 uppercase tracking-wide">
+                  Status Pendataan <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="sel-status-pendataan"
+                  value={formData.statusPendataan || 'Usulan Baru'}
+                  onChange={(e) => handleFieldChange('statusPendataan', e.target.value)}
+                  className="w-full text-sm p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-hidden transition-colors bg-white font-semibold"
+                  required
+                >
+                  {opt.STATUS_PENDATAAN_OPTIONS.map((optVal) => (
+                    <option key={optVal} value={optVal}>{optVal}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -2083,6 +2110,22 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
                     );
                   })}
                 </div>
+                {formData.programBantuan?.includes('Lainnya') && (
+                  <div className="mt-3 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 max-w-md animate-fadeIn">
+                    <label className="block text-[10px] font-bold text-indigo-700 mb-1.5 uppercase tracking-wide">
+                      Sebutkan Program Bantuan Lainnya <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="in-program-bantuan-lainnya"
+                      value={formData.programBantuanLainnya || ''}
+                      onChange={(e) => handleFieldChange('programBantuanLainnya', e.target.value)}
+                      placeholder="Contoh: Bantuan Beras SPHP, BLT El Nino, dll"
+                      className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -2453,6 +2496,8 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
             </div>
           </div>
         )}
+          </motion.div>
+        </AnimatePresence>
 
         {/* Navigation Actions controls footer */}
         <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between">

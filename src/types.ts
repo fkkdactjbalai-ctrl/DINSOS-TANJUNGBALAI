@@ -41,6 +41,7 @@ export interface SurveyData {
 
   // Section 1: Data Petugas & Lokasi
   namaPendata: string;
+  statusPendataan?: string; // e.g. 'Bayi Baru Lahir (BBL)', 'Usulan Baru', etc.
   noKK: string;
   namaResponden: string;
   kecamatan: string;
@@ -72,6 +73,7 @@ export interface SurveyData {
   penyakitKronis: string;
   jaminanKesehatan: string;
   programBantuan: string[]; // Checkbox multiple
+  programBantuanLainnya?: string; // input text for Lainnya
   asetBergerak: string[]; // Checkbox multiple
   asetTidakBergerak: string[]; // Checkbox multiple
   jumlahTernak: string;

@@ -3,17 +3,19 @@ import {
   Search, FileSpreadsheet, Eye, Edit2, Trash2, Database, MapPin, Calendar, 
   HelpCircle, Sparkles, SlidersHorizontal, AlertCircle, FileText,
   Cloud, CloudOff, RefreshCw, Settings, Code, Copy, ChevronDown, ChevronUp, 
-  Check, ExternalLink, Info, CheckCircle2, CloudLightning
+  Check, ExternalLink, Info, CheckCircle2, CloudLightning, Download, Printer
 } from 'lucide-react';
 import { SurveyData } from '../types';
 import { exportSurveysToCSV } from '../utils/csvExport';
 import { getGoogleAppsScriptTemplate } from '../utils/syncService';
+import { STATUS_PENDATAAN_OPTIONS } from '../data/options';
 
 interface DataSummaryTableProps {
   surveys: SurveyData[];
   onView: (survey: SurveyData) => void;
   onEdit: (survey: SurveyData) => void;
   onDelete: (id: string) => void;
+  onPrint: (survey: SurveyData) => void;
   onLoadSeeds: () => void;
   onClearAll: () => void;
   userRole?: 'admin' | 'pendata' | null;
@@ -27,14 +29,23 @@ interface DataSummaryTableProps {
   onSyncAll: (unsyncedOnly: boolean) => Promise<{ success: boolean; count: number }>;
 }
 
+const getStatusPendataanBadgeColorByValue = (val?: string) => {
+  const status = val || 'Usulan Baru';
+  if (status === 'Bayi Baru Lahir (BBL)') return 'bg-sky-50 text-sky-800 border-sky-105';
+  if (status === 'Pembaharuan Desil') return 'bg-amber-55 bg-amber-50 text-amber-800 border-amber-100';
+  if (status === 'Pindah Wilayah') return 'bg-purple-50 text-purple-800 border-purple-100';
+  return 'bg-indigo-50 text-indigo-800 border-indigo-100'; // Default is Usulan Baru
+};
+
 export default function DataSummaryTable({ 
-  surveys, onView, onEdit, onDelete, onLoadSeeds, onClearAll, userRole,
+  surveys, onView, onEdit, onDelete, onPrint, onLoadSeeds, onClearAll, userRole,
   syncUrl, setSyncUrl, isAutoSync, setIsAutoSync, onSyncSurvey, onSyncAll
 }: DataSummaryTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterKecamatan, setFilterKecamatan] = useState('Semua');
   const [filterKelurahan, setFilterKelurahan] = useState('Semua');
   const [filterSyncStatus, setFilterSyncStatus] = useState('Semua');
+  const [filterStatusPendataan, setFilterStatusPendataan] = useState('Semua');
 
   // Cloud Sync state variables
   const [isSyncPanelOpen, setIsSyncPanelOpen] = useState(false);
@@ -63,7 +74,10 @@ export default function DataSummaryTable({
     if (filterSyncStatus === 'synced') matchesSync = !!s.synced;
     if (filterSyncStatus === 'unsynced') matchesSync = !s.synced;
 
-    return matchesSearch && matchesKecamatan && matchesKelurahan && matchesSync;
+    const matchesStatusPendataan = filterStatusPendataan === 'Semua' || 
+      (s.statusPendataan || 'Usulan Baru') === filterStatusPendataan;
+
+    return matchesSearch && matchesKecamatan && matchesKelurahan && matchesSync && matchesStatusPendataan;
   });
 
   // Extract unique subdistricts (kecamatan) for filter list
@@ -85,6 +99,23 @@ export default function DataSummaryTable({
 
   const handleExport = () => {
     exportSurveysToCSV(filteredSurveys);
+  };
+
+  const handleBackupData = () => {
+    try {
+      const dataStr = JSON.stringify(surveys, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `sensus_surveys_v2_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Gagal mencadangkan data:', e);
+    }
   };
 
   return (
@@ -121,6 +152,16 @@ export default function DataSummaryTable({
               >
                 <FileSpreadsheet className="h-4 w-4" />
                 Ekspor Hasil Saringan
+              </button>
+
+              <button
+                id="btn-backup-json"
+                type="button"
+                onClick={handleBackupData}
+                className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold px-4 py-2.5 flex items-center gap-1.5 transition-all shadow-md shadow-amber-600/10 cursor-pointer select-none"
+              >
+                <Download className="h-4 w-4" />
+                Cadangkan Data (JSON)
               </button>
 
               {userRole !== 'pendata' && (
@@ -362,6 +403,22 @@ export default function DataSummaryTable({
               <option value="unsynced">Lokal Saja (LOKAL)</option>
             </select>
           </div>
+
+          {/* Status Pendataan Saring */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Status Pendataan:</span>
+            <select
+              id="table-filter-status-pendataan"
+              value={filterStatusPendataan}
+              onChange={(e) => setFilterStatusPendataan(e.target.value)}
+              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="Semua">Semua Status</option>
+              {STATUS_PENDATAAN_OPTIONS.map((optVal) => (
+                <option key={optVal} value={optVal}>{optVal}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -419,6 +476,9 @@ export default function DataSummaryTable({
                       {new Date(survey.submittedAt).toLocaleDateString('id-ID', {
                         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
                       })}
+                    </span>
+                    <span className={`inline-flex items-center mt-1 text-[9.5px] font-bold border rounded-md px-1.5 py-0.5 ${getStatusPendataanBadgeColorByValue(survey.statusPendataan)}`}>
+                      {survey.statusPendataan || 'Usulan Baru'}
                     </span>
                   </td>
                   <td className="p-4">
@@ -490,6 +550,15 @@ export default function DataSummaryTable({
                         className="p-2 text-slate-600 hover:text-indigo-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                       >
                         <Eye className="h-4 w-4" />
+                      </button>
+
+                      <button
+                        id={`btn-print-row-${survey.id}`}
+                        onClick={() => onPrint(survey)}
+                        title="Cetak Data Keluarga (Hardcopy)"
+                        className="p-2 text-slate-600 hover:text-emerald-750 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Printer className="h-4 w-4" />
                       </button>
 
                       <button

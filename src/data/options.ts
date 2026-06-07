@@ -9,6 +9,13 @@ export const KECAMATAN_KELURAHAN: Record<string, string[]> = {
   'Kecamatan Tanjungbalai Utara': ['Tanjungbalai Kota III', 'Tanjungbalai Kota IV', 'Sejahtera', 'Matahalasan', 'Kuala Silo Bestari']
 };
 
+export const STATUS_PENDATAAN_OPTIONS = [
+  'Bayi Baru Lahir (BBL)',
+  'Usulan Baru',
+  'Pembaharuan Desil',
+  'Pindah Wilayah'
+];
+
 export const STATUS_KEPEMILIKAN_RUMAH = [
   'Milik Sendiri',
   'Kontrak / Sewa',
@@ -283,7 +290,8 @@ export const PROGRAM_BANTUAN = [
   'Program Indonesia Pintar (PIP / Beasiswa)',
   'Kartu Prakerja / Pelatihan Ketenagakerjaan',
   'Penerima Bantuan Iuran Jaminan Kesehatan (PBI JK)',
-  'Tidak Menerima Program Bantuan'
+  'Tidak Menerima Program Bantuan',
+  'Lainnya'
 ];
 
 export const ASET_BERGERAK = [
@@ -358,7 +366,8 @@ export const PMKS_CATEGORIES = [
   'Keluarga Bermasalah Sosial Psikologis',
   'Keluarga Rumah Tidak Layak Huni',
   'Komunitas Adat Terpencil',
-  'Korban Perdagangan Orang (TPPO)'
+  'Korban Perdagangan Orang (TPPO)',
+  'Yatim Piatu (YAPI)'
 ];
 
 export const emptyFamilyMember = (): FamilyMember => ({
@@ -400,6 +409,7 @@ export const emptySurvey = (): SurveyData => ({
   id: '',
   submittedAt: '',
   namaPendata: '',
+  statusPendataan: 'Usulan Baru',
   noKK: '',
   namaResponden: '',
   kecamatan: '',
@@ -425,6 +435,7 @@ export const emptySurvey = (): SurveyData => ({
   penyakitKronis: 'Tidak Ada Penyakit Kronis',
   jaminanKesehatan: 'Ada, BPJS Kesehatan PBI (Pemerintah/Gratis)',
   programBantuan: ['Bantuan Pangan Non-Tunai (BPNT / Sembako)'],
+  programBantuanLainnya: '',
   asetBergerak: ['Sepeda Motor', 'Televisi / Smart TV', 'Kulkas / Lemari Es'],
   asetTidakBergerak: ['Tidak Memiliki Aset Tidak Bergerak'],
   jumlahTernak: 'Tidak Punya Ternak',
@@ -446,6 +457,7 @@ export const seedSurveys: SurveyData[] = [
     id: 'srv_9841243',
     submittedAt: '2026-05-30T10:15:00Z',
     namaPendata: 'Stempel Kito Tanjungbalai',
+    statusPendataan: 'Usulan Baru',
     noKK: '3273150908850021',
     namaResponden: 'Ahmad Hermawan',
     kecamatan: 'Kecamatan Datuk Bandar',
@@ -589,6 +601,7 @@ export const seedSurveys: SurveyData[] = [
     id: 'srv_1238472',
     submittedAt: '2026-05-31T07:22:00Z',
     namaPendata: 'Stempel Kito Tanjungbalai',
+    statusPendataan: 'Pembaharuan Desil',
     noKK: '3273151811900014',
     namaResponden: 'Siti Rahmawati',
     kecamatan: 'Kecamatan Sei Tualang Raso',
