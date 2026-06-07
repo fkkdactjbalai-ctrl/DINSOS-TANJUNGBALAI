@@ -27,6 +27,8 @@ interface DataSummaryTableProps {
   setIsAutoSync: (enabled: boolean) => void;
   onSyncSurvey: (id: string) => Promise<{ success: boolean; message: string }>;
   onSyncAll: (unsyncedOnly: boolean) => Promise<{ success: boolean; count: number }>;
+  onPullCloudData?: () => Promise<void>;
+  isPullingCloud?: boolean;
 }
 
 const getStatusPendataanBadgeColorByValue = (val?: string) => {
@@ -39,7 +41,8 @@ const getStatusPendataanBadgeColorByValue = (val?: string) => {
 
 export default function DataSummaryTable({ 
   surveys, onView, onEdit, onDelete, onPrint, onLoadSeeds, onClearAll, userRole,
-  syncUrl, setSyncUrl, isAutoSync, setIsAutoSync, onSyncSurvey, onSyncAll
+  syncUrl, setSyncUrl, isAutoSync, setIsAutoSync, onSyncSurvey, onSyncAll,
+  onPullCloudData, isPullingCloud = false
 }: DataSummaryTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterKecamatan, setFilterKecamatan] = useState('Semua');
@@ -245,7 +248,7 @@ export default function DataSummaryTable({
               <CloudOff className="h-4 w-4 text-amber-500" /> {totalUnsynced}
             </span>
           </div>
-          <div className="col-span-2 sm:col-span-1 flex items-center font-sans">
+          <div className="col-span-2 sm:col-span-1 flex flex-col justify-center gap-1.5 font-sans">
             <button
               id="btn-sync-all-unsynced"
               type="button"
@@ -255,9 +258,9 @@ export default function DataSummaryTable({
                 await onSyncAll(true);
                 setIsSyncingAll(false);
               }}
-              className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer select-none ${
+              className={`w-full py-2 px-3 rounded-lg text-xs font-bold text-white transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer select-none ${
                 totalUnsynced === 0
-                  ? 'bg-slate-200 text-slate-450 shadow-none cursor-not-allowed'
+                  ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
                   : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/15'
               }`}
             >
@@ -268,6 +271,23 @@ export default function DataSummaryTable({
               )}
               {isSyncingAll ? 'Menyinkronkan...' : 'Sinkronkan Data Lokal'}
             </button>
+
+            {userRole === 'admin' && onPullCloudData && (
+              <button
+                id="btn-pull-cloud-data"
+                type="button"
+                disabled={isPullingCloud}
+                onClick={onPullCloudData}
+                className={`w-full py-2 px-3 rounded-lg text-xs font-bold border border-emerald-600 bg-white text-emerald-800 hover:bg-emerald-50 hover:border-emerald-700 transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer select-none`}
+              >
+                {isPullingCloud ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                ) : (
+                  <Download className="h-3.5 w-3.5 text-emerald-600" />
+                )}
+                {isPullingCloud ? 'Menarik Data...' : 'Tarik Data dari Awan'}
+              </button>
+            )}
           </div>
         </div>
 

@@ -198,6 +198,55 @@ export async function sendSurveyToGoogleAppsScript(
 }
 
 /**
+ * Fetches all surveys from the Google Apps Script Web App.
+ */
+export async function fetchSurveysFromGoogleAppsScript(
+  url: string
+): Promise<{ success: boolean; surveys?: SurveyData[]; message: string }> {
+  if (!url || !url.trim().startsWith('http')) {
+    return { 
+      success: false, 
+      message: 'URL Google Apps Script tidak valid.' 
+    };
+  }
+
+  try {
+    const fetchUrl = `${url.trim()}${url.includes('?') ? '&' : '?'}action=get_dtsen_data`;
+    const response = await fetch(fetchUrl, {
+      method: 'GET',
+      mode: 'cors',
+    });
+
+    if (response.ok) {
+      const jsonResult = await response.json();
+      if (jsonResult && jsonResult.status === 'success') {
+        return {
+          success: true,
+          surveys: jsonResult.surveys,
+          message: `Berhasil menarik ${jsonResult.surveys?.length || 0} data dari Google Sheets.`
+        };
+      } else {
+        return {
+          success: false,
+          message: `Server mengembalikan status gagal: ${jsonResult?.message || 'Error tidak diketahui'}`
+        };
+      }
+    } else {
+      return {
+        success: false,
+        message: `HTTP Error: ${response.status} (${response.statusText})`
+      };
+    }
+  } catch (error: any) {
+    console.error('Error fetching surveys from Google Apps Script:', error);
+    return {
+      success: false,
+      message: `Gagal menarik data dari awan: ${error.message || 'Periksa koneksi atau URL script Anda'}`
+    };
+  }
+}
+
+/**
  * Returns a copy-pasteable script template for Google Apps Script Google Sheets
  */
 export function getGoogleAppsScriptTemplate(): string {
@@ -209,6 +258,9 @@ export function getGoogleAppsScriptTemplate(): string {
  * 2. Klik menu 'Ekstensi' atau 'Extensions' -> pilih 'Apps Script'.
  * 3. Hapus seluruh kode bawaan yang ada di editor, lalu tempelkan seluruh kode di bawah ini.
  * 4. Klik ikon Save (Disket).
+ * 5. Klik 'Terapkan' atau 'Deploy' -> 'Penerapan Baru' atau 'New Deployment'.
+ * 6. Pilih Jenis: 'Aplikasi Web' atau 'Web App'.
+ * 7. Akses: 'Siapa saja' atau 'Anyone'. Klik Terapkan lalu salin URL web aplikasinya.
  */
 
 function doPost(e) {
@@ -247,19 +299,32 @@ function doPost(e) {
         "USULAN_BANTUAN",
         "JUMLAH_JIWA",
         "RINGKASAN_KELUARGA",
-        "CATATAN_SURVEY"
+        "CATATAN_SURVEY",
+        "RAW_JSON"
       ]);
       
       // Mendesain header agar tampak rapi
-      var headerRange = sheet.getRange(1, 1, 1, 18);
+      var headerRange = sheet.getRange(1, 1, 1, 19);
       headerRange.setFontWeight("bold");
       headerRange.setBackground("#4F46E5");
       headerRange.setFontColor("#FFFFFF");
       headerRange.setHorizontalAlignment("center");
     }
     
-    // Masukkan data baris baru
-    sheet.appendRow([
+    // Cek apakah ID_DATA sudah ada di Sheet untuk meremajakan (update) data dan menghindari duplikasi
+    var existingRowIndex = -1;
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var idValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < idValues.length; i++) {
+        if (idValues[i][0] === flatData.id) {
+          existingRowIndex = i + 2; // Baris di sheet mulai dari 1, ditambah offset header (baris 2 adalah indexes index 0)
+          break;
+        }
+      }
+    }
+    
+    var rowData = [
       flatData.id,
       flatData.submittedAt,
       flatData.namaPendata,
@@ -277,8 +342,18 @@ function doPost(e) {
       flatData.jenisBantuanDiinginkan,
       flatData.jumlahAnggotaKeluarga,
       flatData.daftarAnggotaKeluarga,
-      flatData.catatan
-    ]);
+      flatData.catatan,
+      JSON.stringify(payload.raw)
+    ];
+    
+    if (existingRowIndex !== -1) {
+      // Overwrite baris yang sudah ada (menghindari data ganda)
+      var range = sheet.getRange(existingRowIndex, 1, 1, rowData.length);
+      range.setValues([rowData]);
+    } else {
+      // Tambah baris baru jika belum terdata
+      sheet.appendRow(rowData);
+    }
     
     // Berhasil menyimpan
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -297,13 +372,51 @@ function doPost(e) {
   }
 }
 
-// Fungsi untuk mengetes koneksi dasar (GET request)
+// Fungsi untuk menarik data bagi Admin, atau mengetes koneksi dasar (GET request)
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ 
-    "status": "online", 
-    "app": "DTSEN Kota Tanjungbalai Cloud Sync Link Active!", 
-    "timestamp": new Date().toISOString() 
-  })).setMimeType(ContentService.MimeType.JSON);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("DTSEN_Data");
+    
+    // Jika parameter 'action' adalah 'get_dtsen_data', kembalikan semua data raw
+    if (e && e.parameter && e.parameter.action === 'get_dtsen_data') {
+      var dataList = [];
+      if (sheet) {
+        var lastRow = sheet.getLastRow();
+        if (lastRow > 1) {
+          // Kolom RAW_JSON berada di kolom ke-19
+          var rawValues = sheet.getRange(2, 19, lastRow - 1, 1).getValues();
+          for (var i = 0; i < rawValues.length; i++) {
+            var rawStr = rawValues[i][0];
+            if (rawStr) {
+              try {
+                dataList.push(JSON.parse(rawStr));
+              } catch (parseErr) {
+                // Lewati jika format tidak valid
+              }
+            }
+          }
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ 
+        "status": "success", 
+        "surveys": dataList 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Default ping response
+    return ContentService.createTextOutput(JSON.stringify({ 
+      "status": "online", 
+      "app": "DTSEN Kota Tanjungbalai Cloud Sync Link Active!", 
+      "timestamp": new Date().toISOString() 
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      "status": "error", 
+      "message": err.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 `;
 }

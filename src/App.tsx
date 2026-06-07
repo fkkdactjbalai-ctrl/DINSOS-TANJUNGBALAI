@@ -7,7 +7,7 @@ import DataSummaryTable from './components/DataSummaryTable';
 import DetailModal from './components/DetailModal';
 import GPSDistributionMap from './components/GPSDistributionMap';
 import { seedSurveys, emptySurvey } from './data/options';
-import { sendSurveyToGoogleAppsScript } from './utils/syncService';
+import { sendSurveyToGoogleAppsScript, fetchSurveysFromGoogleAppsScript } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
 import QuickStats from './components/QuickStats';
@@ -21,6 +21,7 @@ export default function App() {
   const [editingSurvey, setEditingSurvey] = useState<SurveyData | null>(null);
   const [autoPrintActive, setAutoPrintActive] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'danger' } | null>(null);
+  const [isPullingCloud, setIsPullingCloud] = useState(false);
 
   const handlePrint = (survey: SurveyData) => {
     setSelectedSurvey(survey);
@@ -176,28 +177,6 @@ export default function App() {
 
     saveToLocalStorage(updatedSurveys);
 
-    // Dynamic auto-sync with the Google Sheets script URL
-    if (isAutoSync && syncUrl) {
-      setTimeout(async () => {
-        const res = await sendSurveyToGoogleAppsScript(syncUrl, finalSurveyToSync);
-        if (res.success) {
-          setSurveys(prev => {
-            const nextList = prev.map(s => {
-              if (s.id === targetSurveyId) {
-                return { ...s, synced: true, syncedAt: new Date().toISOString() };
-              }
-              return s;
-            });
-            localStorage.setItem('sensus_surveys_v2', JSON.stringify(nextList));
-            return nextList;
-          });
-          showToast(`Sinkronisasi awan sukses untuk KK ${finalSurveyToSync.noKK}!`, 'success');
-        } else {
-          showToast(`Data tersimpan! Gagal sinkron otomatis ke Google Sheets: ${res.message}`, 'info');
-        }
-      }, 600);
-    }
-
     // Scroll smoothly to the summary database table for verification
     setTimeout(() => {
       const dbElement = document.getElementById('database-section');
@@ -261,6 +240,62 @@ export default function App() {
     }
 
     return { success: successCount === toSync.length, count: successCount };
+  };
+
+  // Pull all records from cloud database and merge locally
+  const handlePullCloudData = async () => {
+    if (!syncUrl) {
+      showToast('Gagal menarik data: URL Google Apps Script belum dikonfigurasi.', 'danger');
+      return;
+    }
+    
+    setIsPullingCloud(true);
+    showToast('Menghubungi Google Sheets untuk menarik data terbaru...', 'info');
+    
+    try {
+      const res = await fetchSurveysFromGoogleAppsScript(syncUrl);
+      if (res.success && res.surveys) {
+        const cloudSurveys = res.surveys;
+        if (cloudSurveys.length === 0) {
+          showToast('Tidak ada data sensus yang tersedia di Google Sheets.', 'info');
+          setIsPullingCloud(false);
+          return;
+        }
+
+        setSurveys(prev => {
+          // Map local surveys into a dictionary by ID
+          const mergedDict: { [id: string]: SurveyData } = {};
+          
+          // Seed with current local state
+          prev.forEach(s => {
+            mergedDict[s.id] = s;
+          });
+
+          // Overwrite/insert with data fetched from Google Sheets
+          cloudSurveys.forEach(s => {
+            // Force status to be synced in local state since it came from sheets!
+            mergedDict[s.id] = { ...s, synced: true };
+          });
+
+          // Convert back to sorted list (newest first, based on submittedAt)
+          const mergedList = Object.values(mergedDict).sort((a, b) => {
+            return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+          });
+
+          localStorage.setItem('sensus_surveys_v2', JSON.stringify(mergedList));
+          return mergedList;
+        });
+
+        showToast(`Sinkronisasi Dua-Arah Sukses! Berhasil mengimpor & menyelaraskan ${cloudSurveys.length} data sensus dari Google Sheets.`, 'success');
+      } else {
+        showToast(`Gagal memuat data dari cloud: ${res.message}`, 'danger');
+      }
+    } catch (err: any) {
+      console.error('Failed to pull surveys:', err);
+      showToast(`Gagal menyambung ke server cloud: ${err.message || 'Cek koneksi internet'}`, 'danger');
+    } finally {
+      setIsPullingCloud(false);
+    }
   };
 
   // Trigger editing state and load data into form
@@ -460,6 +495,8 @@ export default function App() {
             setIsAutoSync={updateAutoSync}
             onSyncSurvey={handleSyncSurvey}
             onSyncAll={handleSyncAll}
+            onPullCloudData={handlePullCloudData}
+            isPullingCloud={isPullingCloud}
           />
         </section>
 

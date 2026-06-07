@@ -58,14 +58,12 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Sync state if initialData changes (e.g. edit mode activated)
+  // Sync state if initialData changes (e.g. edit mode activated or cleared)
   useEffect(() => {
-    if (initialData) {
-      setFormData(mergeSurveyWithDefaults(initialData));
-      setCurrentSection(0);
-      setActiveMemberTabIdx(0);
-      setErrors([]);
-    }
+    setFormData(mergeSurveyWithDefaults(initialData));
+    setCurrentSection(0);
+    setActiveMemberTabIdx(0);
+    setErrors([]);
   }, [initialData]);
 
   // Handle auto calculations of age when birthdate changes
@@ -408,6 +406,14 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
         finalFormData.pmksJenis = '';
       }
       onSubmit(finalFormData);
+
+      // Reset form if it is a new submission (not edit)
+      if (!initialData) {
+        setFormData(opt.emptySurvey());
+        setCurrentSection(0);
+        setActiveMemberTabIdx(0);
+        setErrors([]);
+      }
     }
   };
 
