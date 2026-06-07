@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Search, FileSpreadsheet, Eye, Edit2, Trash2, Database, MapPin, Calendar, 
   HelpCircle, Sparkles, SlidersHorizontal, AlertCircle, FileText,
@@ -56,6 +56,22 @@ export default function DataSummaryTable({
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [individualSyncingStatus, setIndividualSyncingStatus] = useState<Record<string, 'idle' | 'syncing' | 'success' | 'error'>>({});
+
+  // URL management states with Save URL action compatibility
+  const [localUrl, setLocalUrl] = useState(syncUrl);
+  const [isUrlSaved, setIsUrlSaved] = useState(false);
+
+  useEffect(() => {
+    setLocalUrl(syncUrl);
+  }, [syncUrl]);
+
+  const handleSaveUrl = () => {
+    setSyncUrl(localUrl);
+    setIsUrlSaved(true);
+    setTimeout(() => {
+      setIsUrlSaved(false);
+    }, 2500);
+  };
 
   // Stats for the synchronization panel
   const totalLocal = surveys.length;
@@ -297,21 +313,42 @@ export default function DataSummaryTable({
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
               <div className="md:col-span-8 space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">Web App Executable URL Google Apps Script:</label>
-                <input
-                  type="text"
-                  value={syncUrl}
-                  onChange={(e) => setSyncUrl(e.target.value)}
-                  placeholder="https://script.google.com/macros/s/..."
-                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 outline-hidden focus:border-indigo-500 font-mono"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={localUrl}
+                    onChange={(e) => {
+                      setLocalUrl(e.target.value);
+                      setIsUrlSaved(false);
+                    }}
+                    placeholder="https://script.google.com/macros/s/..."
+                    className="flex-1 text-xs p-2.5 rounded-lg border border-slate-200 outline-hidden focus:border-indigo-500 font-mono"
+                  />
+                  <button
+                    id="btn-save-sync-url"
+                    type="button"
+                    onClick={handleSaveUrl}
+                    className={`px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isUrlSaved 
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100'
+                    }`}
+                  >
+                    {isUrlSaved ? <Check className="h-3.5 w-3.5" /> : <Settings className="h-3.5 w-3.5 animate-pulse" />}
+                    {isUrlSaved ? 'Tersimpan!' : 'Simpan URL'}
+                  </button>
+                </div>
               </div>
 
-              <div className="md:col-span-4 flex flex-wrap gap-2">
+              <div className="md:col-span-4 flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     const fallbackDefault = 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec';
+                    setLocalUrl(fallbackDefault);
                     setSyncUrl(fallbackDefault);
+                    setIsUrlSaved(true);
+                    setTimeout(() => setIsUrlSaved(false), 2000);
                   }}
                   className="flex-1 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border border-slate-150 text-center"
                 >

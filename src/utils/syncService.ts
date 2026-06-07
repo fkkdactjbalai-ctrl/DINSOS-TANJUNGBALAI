@@ -225,10 +225,15 @@ export async function fetchSurveysFromGoogleAppsScript(
           surveys: jsonResult.surveys,
           message: `Berhasil menarik ${jsonResult.surveys?.length || 0} data dari Google Sheets.`
         };
+      } else if (jsonResult && jsonResult.status === 'online') {
+        return {
+          success: false,
+          message: 'Script Anda terdeteksi masih menggunakan versi lama (belum mendukung pengambilan data). Silakan salin "Kode Google Apps Script" terbaru dari menu "Lihat Script" di tabel data, lalu buat "Penerapan Baru" (New Deployment) dengan akses "Siapa Saja" (Anyone) di Google Sheets Anda!'
+        };
       } else {
         return {
           success: false,
-          message: `Server mengembalikan status gagal: ${jsonResult?.message || 'Error tidak diketahui'}`
+          message: `Server mengembalikan status gagal: ${jsonResult?.message || 'Format tidak dikenal. Kemungkinan Anda belum memperbarui kode Apps Script Anda ke versi terbaru.'}`
         };
       }
     } else {
