@@ -756,7 +756,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
                 <input
                   id="in-nama-pendata"
                   type="text"
-                  placeholder="Contoh: Budi Santoso, S.Sos"
+                  placeholder="Contoh: Stempel Kito Tanjungbalai"
                   value={formData.namaPendata}
                   onChange={(e) => handleFieldChange('namaPendata', e.target.value)}
                   className="w-full text-sm p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-hidden transition-colors"

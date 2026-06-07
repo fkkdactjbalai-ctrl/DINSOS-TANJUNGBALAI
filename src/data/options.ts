@@ -428,7 +428,7 @@ export const seedSurveys: SurveyData[] = [
   {
     id: 'srv_9841243',
     submittedAt: '2026-05-30T10:15:00Z',
-    namaPendata: 'Budi Santoso, S.Sos',
+    namaPendata: 'Stempel Kito Tanjungbalai',
     noKK: '3273150908850021',
     namaResponden: 'Ahmad Hermawan',
     kecamatan: 'Kecamatan Datuk Bandar',
@@ -569,7 +569,7 @@ export const seedSurveys: SurveyData[] = [
   {
     id: 'srv_1238472',
     submittedAt: '2026-05-31T07:22:00Z',
-    namaPendata: 'Budi Santoso, S.Sos',
+    namaPendata: 'Stempel Kito Tanjungbalai',
     noKK: '3273151811900014',
     namaResponden: 'Siti Rahmawati',
     kecamatan: 'Kecamatan Sei Tualang Raso',

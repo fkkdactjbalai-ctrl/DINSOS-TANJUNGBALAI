@@ -50,10 +50,10 @@ export default function Header({ surveys }: HeaderProps) {
         <div className="flex items-center gap-4 text-xs">
           <div className="text-right hidden sm:block">
             <p className="text-[9px] opacity-70 leading-none uppercase tracking-widest">Petugas Lapangan</p>
-            <p className="text-xs font-semibold text-white">Budi Santoso (ID: 99281)</p>
+            <p className="text-xs font-semibold text-white">Stempel Kito Tanjungbalai</p>
           </div>
           <div className="h-8 w-8 rounded-full bg-indigo-700 border border-indigo-400 flex items-center justify-center font-bold text-xs">
-            BS
+            SK
           </div>
         </div>
       </div>

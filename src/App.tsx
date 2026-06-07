@@ -14,8 +14,16 @@ export default function App() {
   const [editingSurvey, setEditingSurvey] = useState<SurveyData | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'danger' } | null>(null);
 
-  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzxwm476bHaoiVaYHUdI-VNm52JUxfcVjpK6vo-cYYJ3xMOMTirr9JmeYrYlcA_VlNt/exec';
-  const [syncUrl, setSyncUrl] = useState(() => localStorage.getItem('dtsen_sync_url') || DEFAULT_SYNC_URL);
+  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec';
+  const [syncUrl, setSyncUrl] = useState(() => {
+    const stored = localStorage.getItem('dtsen_sync_url');
+    // Auto-migrate from the old default to prevent user using outdated URL cached in browser
+    if (!stored || stored.includes('AKfycbzxwm') || stored === 'https://script.google.com/macros/s/AKfycbzxwm476bHaoiVaYHUdI-VNm52JUxfcVjpK6vo-cYYJ3xMOMTirr9JmeYrYlcA_VlNt/exec') {
+      localStorage.setItem('dtsen_sync_url', DEFAULT_SYNC_URL);
+      return DEFAULT_SYNC_URL;
+    }
+    return stored;
+  });
   const [isAutoSync, setIsAutoSync] = useState(() => {
     const stored = localStorage.getItem('dtsen_auto_sync');
     return stored === null ? true : stored === 'true';

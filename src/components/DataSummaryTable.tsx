@@ -214,7 +214,7 @@ export default function DataSummaryTable({
                 <button
                   type="button"
                   onClick={() => {
-                    const fallbackDefault = 'https://script.google.com/macros/s/AKfycbzxwm476bHaoiVaYHUdI-VNm52JUxfcVjpK6vo-cYYJ3xomtirr9Jmeyrlca_vlnnt/exec';
+                    const fallbackDefault = 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec';
                     setSyncUrl(fallbackDefault);
                   }}
                   className="flex-1 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border border-slate-150 text-center"
