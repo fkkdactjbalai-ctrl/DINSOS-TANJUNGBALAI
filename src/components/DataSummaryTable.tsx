@@ -318,8 +318,16 @@ export default function DataSummaryTable({
                     type="text"
                     value={localUrl}
                     onChange={(e) => {
-                      setLocalUrl(e.target.value);
-                      setIsUrlSaved(false);
+                      const val = e.target.value;
+                      setLocalUrl(val);
+                      // Auto-save: Update the parent sync URL as the user types
+                      setSyncUrl(val);
+                      setIsUrlSaved(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveUrl();
+                      }
                     }}
                     placeholder="https://script.google.com/macros/s/..."
                     className="flex-1 text-xs p-2.5 rounded-lg border border-slate-200 outline-hidden focus:border-indigo-500 font-mono"
@@ -330,7 +338,7 @@ export default function DataSummaryTable({
                     onClick={handleSaveUrl}
                     className={`px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                       isUrlSaved 
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' 
+                        ? 'bg-emerald-650 bg-emerald-600 text-white shadow-md shadow-emerald-200' 
                         : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100'
                     }`}
                   >
@@ -692,7 +700,7 @@ export default function DataSummaryTable({
                     </ul>
                   </li>
                   <li>Klik <b>Terapkan</b> &raquo; Tekan tombol <b>Berikan Akses (Authorize Access)</b> &raquo; Masuk dan pilih 'Lanjutan' (Advanced) &raquo; Klik 'Buka Proyek Tanpa Judul (tidak aman)' demi memberikan otorisasi penulisan sel spreadsheet.</li>
-                  <li><b>Salin URL Aplikasi Web</b> yang dihasilkan, lalu masukkan URL tersebut ke kolom isian URL Script di atas!</li>
+                  <li><b>Salin URL Aplikasi Web</b> yang dihasilkan, masukkan URL tersebut ke kolom isian URL Script di atas, lalu klik tombol <b>Simpan URL</b> (sistem juga akan melakukan penyimpanan otomatis saat Anda mengetik/menempelkan URL tersebut)!</li>
                 </ol>
               </div>
 
