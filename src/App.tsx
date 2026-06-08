@@ -39,11 +39,16 @@ export default function App() {
     setUserRole(null);
   };
 
-  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec';
+  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzRkb2HTPFyTc1XrlS77D5mtBmNRxs4RSD-67WQsjs4sDtwM_oLywREuwbKyWzSfvVvKA/exec';
   const [syncUrl, setSyncUrl] = useState(() => {
     const stored = localStorage.getItem('dtsen_sync_url');
-    // Auto-migrate from the old default to prevent user using outdated URL cached in browser
-    if (!stored || stored.includes('AKfycbzxwm') || stored === 'https://script.google.com/macros/s/AKfycbzxwm476bHaoiVaYHUdI-VNm52JUxfcVjpK6vo-cYYJ3xMOMTirr9JmeYrYlcA_VlNt/exec') {
+    // Auto-migrate from the old defaults to prevent user using outdated URL cached in browser
+    if (
+      !stored || 
+      stored.includes('AKfycbzxwm') || 
+      stored.includes('AKfycbzE3mom') || 
+      stored === 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec'
+    ) {
       localStorage.setItem('dtsen_sync_url', DEFAULT_SYNC_URL);
       return DEFAULT_SYNC_URL;
     }
