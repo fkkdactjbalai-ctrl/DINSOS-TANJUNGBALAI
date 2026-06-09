@@ -2263,14 +2263,27 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCameraField('fotoKK')}
-                      className="w-full bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Camera className="h-3.5 w-3.5" />
-                      Ambil Kamera
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCameraField('fotoKK')}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors text-center"
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        Kamera Web
+                      </button>
+                      <label className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors text-center select-none">
+                        <Camera className="h-3.5 w-3.5" />
+                        Kamera HP
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleFileUpload('fotoKK', e)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -2360,14 +2373,27 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCameraField('fotoRumahDepan')}
-                      className="w-full bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Camera className="h-3.5 w-3.5" />
-                      Ambil Kamera
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCameraField('fotoRumahDepan')}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors text-center"
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        Kamera Web
+                      </button>
+                      <label className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors text-center select-none">
+                        <Camera className="h-3.5 w-3.5" />
+                        Kamera HP
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleFileUpload('fotoRumahDepan', e)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -2457,14 +2483,27 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCameraField('fotoRumahDalam')}
-                      className="w-full bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Camera className="h-3.5 w-3.5" />
-                      Ambil Kamera
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCameraField('fotoRumahDalam')}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors text-center"
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        Kamera Web
+                      </button>
+                      <label className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold py-2 flex items-center justify-center gap-1 cursor-pointer transition-colors text-center select-none">
+                        <Camera className="h-3.5 w-3.5" />
+                        Kamera HP
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleFileUpload('fotoRumahDalam', e)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"

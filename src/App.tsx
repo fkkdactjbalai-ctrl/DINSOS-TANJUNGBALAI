@@ -7,7 +7,12 @@ import DataSummaryTable from './components/DataSummaryTable';
 import DetailModal from './components/DetailModal';
 import GPSDistributionMap from './components/GPSDistributionMap';
 import { seedSurveys, emptySurvey } from './data/options';
-import { sendSurveyToGoogleAppsScript, fetchSurveysFromGoogleAppsScript } from './utils/syncService';
+import { 
+  sendSurveyToGoogleAppsScript, 
+  fetchSurveysFromGoogleAppsScript,
+  subscribeToSurveys,
+  deleteSurveyFromFirestore
+} from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
 import QuickStats from './components/QuickStats';
@@ -69,7 +74,7 @@ export default function App() {
     setIsAutoSync(enabled);
   };
 
-  // Load from local storage on mount
+  // Load from local storage on mount and configure real-time active listener sync across devices
   useEffect(() => {
     const saved = localStorage.getItem('sensus_surveys_v2');
     if (saved) {
@@ -82,6 +87,33 @@ export default function App() {
       // Pre-fill with empty array initially
       setSurveys([]);
     }
+
+    // Subscribe to Firestore changes to synchronize in real-time across devices
+    const unsubscribe = subscribeToSurveys((cloudSurveys) => {
+      setSurveys(prev => {
+        const mergedDict: { [id: string]: SurveyData } = {};
+        
+        // Seed with current local state
+        prev.forEach(s => {
+          mergedDict[s.id] = s;
+        });
+
+        // Merging updated cloud items
+        cloudSurveys.forEach(s => {
+          mergedDict[s.id] = { ...s, synced: true };
+        });
+
+        // Convert back to sorted list (newest first, based on submittedAt)
+        const mergedList = Object.values(mergedDict).sort((a, b) => {
+          return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+        });
+
+        localStorage.setItem('sensus_surveys_v2', JSON.stringify(mergedList));
+        return mergedList;
+      });
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Show auto-dismiss toast alerts
@@ -324,7 +356,11 @@ export default function App() {
     const surveyToDelete = surveys.find(s => s.id === id);
     const updated = surveys.filter(s => s.id !== id);
     saveToLocalStorage(updated);
-    showToast(`Rekaman DTSEN KK ${surveyToDelete?.noKK} telah dihapus dari kearsipan lokal.`, 'danger');
+    
+    // Also delete from Firestore
+    deleteSurveyFromFirestore(id);
+    
+    showToast(`Rekaman DTSEN KK ${surveyToDelete?.noKK} telah dihapus dari kearsipan lokal dan cloud database.`, 'danger');
     
     // Stop editing if deleting the currently edited survey
     if (editingSurvey && editingSurvey.id === id) {

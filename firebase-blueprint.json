@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "surveys": {
+      "title": "Surveys",
+      "description": "Family and social census survey data records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique survey identifier" },
+        "submittedAt": { "type": "string", "description": "Submission ISO timestamp" },
+        "namaPendata": { "type": "string", "description": "Name of surveyor" },
+        "statusPendataan": { "type": "string", "description": "Status of registration" },
+        "noKK": { "type": "string", "description": "16-digit family card number" },
+        "namaResponden": { "type": "string", "description": "Name of main respondent" },
+        "kecamatan": { "type": "string" },
+        "kelurahan": { "type": "string" },
+        "alamat": { "type": "string" },
+        "statusKepemilikanRumah": { "type": "string" },
+        "buktiKepemilikanTanah": { "type": "string" },
+        "luasLantai": { "type": "number" },
+        "jenisLantai": { "type": "string" },
+        "jenisDinding": { "type": "string" },
+        "jenisAtap": { "type": "string" },
+        "sumberAirMinum": { "type": "string" },
+        "jarakAirMinum": { "type": "string" },
+        "sumberPenerangan": { "type": "string" },
+        "dayaListrik": { "type": "string" },
+        "noMeteranPelanggan": { "type": "string" },
+        "bahanBakarMemasak": { "type": "string" },
+        "fasilitasBab": { "type": "string" },
+        "jenisKloset": { "type": "string" },
+        "pembuanganAkhirTinja": { "type": "string" },
+        "kondisiGiziAnak": { "type": "string" },
+        "penyakitKronis": { "type": "string" },
+        "jaminanKesehatan": { "type": "string" },
+        "programBantuanLainnya": { "type": "string" },
+        "jumlahTernak": { "type": "string" },
+        "aksesInternetKeluarga": { "type": "string" },
+        "rekeningDompetDigital": { "type": "string" },
+        "pmksTerdapat": { "type": "string" },
+        "pmksJenis": { "type": "string" },
+        "jenisBantuanDiinginkan": { "type": "string" },
+        "catatan": { "type": "string" },
+        "fotoKK": { "type": "string" },
+        "fotoRumahDepan": { "type": "string" },
+        "fotoRumahDalam": { "type": "string" },
+        "latitude": { "type": "string" },
+        "longitude": { "type": "string" },
+        "synced": { "type": "boolean" },
+        "syncedAt": { "type": "string" }
+      },
+      "required": ["id", "noKK", "namaResponden"]
+    }
+  },
+  "firestore": {
+    "/surveys/{surveyId}": {
+      "schema": "entities.surveys",
+      "description": "Collection of multi-stage survey documents"
+    }
+  }
+}

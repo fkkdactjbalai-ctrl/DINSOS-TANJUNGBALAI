@@ -83,7 +83,8 @@ export default function DataSummaryTable({
     const matchesSearch = 
       s.noKK.includes(searchTerm) || 
       (s.namaResponden || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.namaPendata || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (s.namaPendata || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.anggotaKeluarga || []).some(m => (m.nama || '').toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesKecamatan = filterKecamatan === 'Semua' || s.kecamatan === filterKecamatan;
     
@@ -487,6 +488,65 @@ export default function DataSummaryTable({
         </div>
       </div>
 
+      {/* Pending Sync Queue panel */}
+      {surveys.filter(s => !s.synced).length > 0 && (
+        <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-900 font-bold text-xs select-none">
+              <CloudLightning className="h-4.5 w-4.5 text-amber-600 shrink-0" />
+              <span>Antrean Tertunda / Gagal Sinkron ({surveys.filter(s => !s.synced).length} Rekaman)</span>
+            </div>
+            <span className="text-[10px] text-amber-700 bg-amber-100 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+              Pending Sync Queue
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+            {surveys.filter(s => !s.synced).map(survey => (
+              <div 
+                key={survey.id} 
+                className="bg-white border border-amber-150 rounded-xl p-3 flex items-center justify-between shadow-xs transition-all hover:border-amber-300"
+              >
+                <div className="space-y-1">
+                  <div className="font-semibold text-slate-800 line-clamp-1">{survey.namaResponden}</div>
+                  <div className="font-mono text-[10px] text-slate-500 font-bold tracking-wider">KK: {survey.noKK}</div>
+                  <div className="text-[9px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-100/50 inline-block">
+                    Belum Sinkron
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  disabled={individualSyncingStatus[survey.id] === 'syncing'}
+                  onClick={async () => {
+                    setIndividualSyncingStatus(prev => ({ ...prev, [survey.id]: 'syncing' }));
+                    const res = await onSyncSurvey(survey.id);
+                    if (res.success) {
+                      setIndividualSyncingStatus(prev => ({ ...prev, [survey.id]: 'success' }));
+                    } else {
+                      setIndividualSyncingStatus(prev => ({ ...prev, [survey.id]: 'error' }));
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer select-none"
+                >
+                  {individualSyncingStatus[survey.id] === 'syncing' ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                      Proses...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3 w-3" />
+                      Retry Sync
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Data Table */}
       {filteredSurveys.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 border border-slate-100 rounded-2xl space-y-3">
@@ -523,7 +583,12 @@ export default function DataSummaryTable({
             </thead>
             <tbody className="divide-y divide-slate-100 divide-y-slate-200">
               {filteredSurveys.map((survey) => (
-                <tr key={survey.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr 
+                  key={survey.id} 
+                  className={`hover:bg-slate-50/50 transition-colors ${
+                    !survey.synced ? 'bg-amber-50/15 border-l-4 border-l-amber-500' : ''
+                  }`}
+                >
                   <td className="p-4 text-slate-500">
                     <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold text-slate-700">
                       {survey.id}

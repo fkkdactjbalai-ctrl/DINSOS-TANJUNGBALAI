@@ -1,0 +1,9 @@
+{
+  "apiKey": "AIzaSyFakeKeyPlaceholderForApplet_12345",
+  "authDomain": "sensus-keluarga.firebaseapp.com",
+  "projectId": "sensus-keluarga",
+  "storageBucket": "sensus-keluarga.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:12345:web:abcdef",
+  "firestoreDatabaseId": "(default)"
+}
