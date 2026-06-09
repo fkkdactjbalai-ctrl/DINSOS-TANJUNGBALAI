@@ -33,6 +33,11 @@ function mergeSurveyWithDefaults(survey: SurveyData | null | undefined): SurveyD
   return {
     ...defaults,
     ...survey,
+    fotoKK: survey.fotoKK || '',
+    fotoRumahDepan: survey.fotoRumahDepan || '',
+    fotoRumahDalam: survey.fotoRumahDalam || '',
+    latitude: survey.latitude || '',
+    longitude: survey.longitude || '',
     programBantuan: survey.programBantuan || [],
     asetBergerak: survey.asetBergerak || [],
     asetTidakBergerak: survey.asetTidakBergerak || [],
@@ -458,15 +463,22 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     }
 
     if (sectionIndex === 3) {
-      // Section 4 (formerly 5): Sosial / Gizi
-      if (formData.programBantuan.length === 0) {
-        freshErrors.push('Pilih setidaknya satu pilihan opsi Program Bantuan Sosial (atau pilih "Tidak Menerima").');
+      // Section 4: Sosial / Gizi (Bypassed / Always Valid)
+    }
+
+    if (sectionIndex === 4) {
+      // Section 5: Dokumentasi & GPS Checks
+      if (!formData.fotoKK) {
+        freshErrors.push('Foto Kartu Keluarga (KK) / KTP wajib disediakan.');
       }
-      if (formData.asetBergerak.length === 0) {
-        freshErrors.push('Pilih setidaknya satu pilihan opsi Aset Bergerak (atau pilih "Tidak Memiliki").');
+      if (!formData.fotoRumahDepan) {
+        freshErrors.push('Foto Rumah Tampak Depan wajib disediakan.');
       }
-      if (formData.asetTidakBergerak.length === 0) {
-        freshErrors.push('Pilih setidaknya satu pilihan opsi Aset Tidak Bergerak (atau pilih "Tidak Memiliki").');
+      if (!formData.fotoRumahDalam) {
+        freshErrors.push('Foto Rumah Tampak Dalam wajib disediakan.');
+      }
+      if (!formData.latitude || !formData.longitude) {
+        freshErrors.push('Koordinat GPS wajib diperoleh. Silakan hubungkan stempel GPS.');
       }
     }
 
@@ -474,13 +486,26 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     return freshErrors.length === 0;
   };
 
-  // Forward Navigation
-  const handleNext = () => {
+  // Forward Navigation via nextStep()
+  const nextStep = () => {
     if (validateSection(currentSection)) {
-      setCurrentSection(prev => Math.min(prev + 1, SECTIONS.length - 1));
+      const nextSec = Math.min(currentSection + 1, SECTIONS.length - 1);
+      setCurrentSection(nextSec);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Synchronize internal state so that Step 5 components recognize data is ready to be inputted
+      if (nextSec === 4) {
+        setFormData(prev => ({
+          ...prev,
+          fotoKK: prev.fotoKK || '',
+          fotoRumahDepan: prev.fotoRumahDepan || '',
+          fotoRumahDalam: prev.fotoRumahDalam || ''
+        }));
+      }
     }
   };
+
+  const handleNext = nextStep;
 
   // Backward Navigation
   const handlePrev = () => {
@@ -509,7 +534,15 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
 
   // Handle Submit Form
   const handleSubmitForm = (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    
+    // Safety lock: if not on Steps 5 (Dokumentasi Berkas, index 4), prevent any saving or submission
+    if (currentSection < 4) {
+      return;
+    }
+
     if (validateSection(currentSection)) {
       const pmksMembers = formData.anggotaKeluarga.filter(m => m.isPmks === 'Ya');
       let finalFormData = { ...formData };
@@ -1032,16 +1065,24 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progress Pengisian</p>
             <div className="flex items-center gap-3 mt-1.5 animate-fade-in">
               <div className="text-3xl font-extrabold text-indigo-950 font-mono">
-                {Math.round(((currentSection + 1) / SECTIONS.length) * 100)}%
+                {currentSection === 4 ? '95%' : `${Math.round(((currentSection + 1) / SECTIONS.length) * 100)}%`}
               </div>
               <p className="text-[11px] text-slate-500 leading-tight">
-                Bagian <strong>{currentSection + 1}</strong> dari <strong>{SECTIONS.length}</strong> sedang aktif
+                {currentSection === 4 ? (
+                  <>
+                    Langkah <strong>Terakhir</strong> dari <strong>5</strong>: Unggah Bukti &amp; Kirim Permanen
+                  </>
+                ) : (
+                  <>
+                    Bagian <strong>{currentSection + 1}</strong> dari <strong>{SECTIONS.length}</strong> sedang aktif
+                  </>
+                )}
               </p>
             </div>
             <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden mt-3">
               <div 
                 className="h-full bg-indigo-600 rounded-full transition-all duration-300"
-                style={{ width: `${((currentSection + 1) / SECTIONS.length) * 100}%` }}
+                style={{ width: `${currentSection === 4 ? 95 : ((currentSection + 1) / SECTIONS.length) * 100}%` }}
               />
             </div>
           </div>
@@ -1143,16 +1184,20 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
         <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 block lg:hidden">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <span className="text-xs font-bold text-indigo-800 tracking-wider">
-              TAHAP {currentSection + 1} DARI {SECTIONS.length}: {SECTIONS[currentSection].title.toUpperCase()}
+              {currentSection === 4 ? (
+                "LANGKAH TIMBAL (5 DARI 5): BERKAS & SIMPAN"
+              ) : (
+                `TAHAP ${currentSection + 1} DARI ${SECTIONS.length}: ${SECTIONS[currentSection].title.toUpperCase()}`
+              )}
             </span>
             <span className="text-xs font-mono text-slate-400">
-              {Math.round(((currentSection + 1) / SECTIONS.length) * 100)}% Selesai
+              {currentSection === 4 ? '95%' : `${Math.round(((currentSection + 1) / SECTIONS.length) * 100)}%`} Selesai
             </span>
           </div>
           <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
             <div 
               className="h-full bg-indigo-600 rounded-full transition-all duration-300"
-              style={{ width: `${((currentSection + 1) / SECTIONS.length) * 100}%` }}
+              style={{ width: `${currentSection === 4 ? 95 : ((currentSection + 1) / SECTIONS.length) * 100}%` }}
             />
           </div>
         </div>
@@ -2781,7 +2826,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
             <button
               id="btn-nav-next"
               type="button"
-              onClick={handleNext}
+              onClick={nextStep}
               className="flex items-center gap-1 px-6 py-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md shadow-indigo-600/10 active:scale-[0.98] cursor-pointer select-none"
             >
               Lanjutkan Formulir
@@ -2791,10 +2836,11 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
             <button
               id="btn-nav-submit"
               type="submit"
-              className="flex items-center gap-1.5 px-7 py-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.01] transition-all shadow-lg shadow-indigo-550/25 cursor-pointer select-none"
+              disabled={!formData.fotoKK || !formData.fotoRumahDepan || !formData.fotoRumahDalam || !formData.latitude || !formData.longitude}
+              className="flex items-center gap-1.5 px-7 py-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.01] transition-all shadow-lg shadow-indigo-550/25 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none disabled:bg-slate-300 disabled:text-slate-500"
             >
               <CheckCircle2 className="h-4.5 w-4.5 text-indigo-100" />
-              {initialData ? 'Simpan Pembaruan DTSEN' : 'Kirim & Submit DTSEN'}
+              {initialData ? 'Simpan Pembaruan DTSEN / Selesai' : 'Kirim Data / Selesai'}
             </button>
           )}
         </div>

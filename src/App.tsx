@@ -392,10 +392,6 @@ export default function App() {
 
   // Delete a survey from history
   const handleDeleteSurvey = (id: string) => {
-    if (userRole === 'pendata') {
-      showToast('Aksi ditolak: Petugas Pendata tidak diperbolehkan menghapus data!', 'danger');
-      return;
-    }
     const surveyToDelete = surveys.find(s => s.id === id);
     const updated = surveys.filter(s => s.id !== id);
     saveToLocalStorage(updated);
@@ -516,11 +512,11 @@ export default function App() {
             
             {userRole === 'pendata' && (
               <div className="text-[10px] text-indigo-200 leading-relaxed bg-black/20 p-2.5 rounded-xl border border-white/5 space-y-1">
-                <p className="font-bold text-amber-300 flex items-center gap-1">
-                  <ShieldAlert className="h-3.5 w-3.5" />
+                <p className="font-bold text-emerald-300 flex items-center gap-1">
+                  <ShieldAlert className="h-3.5 w-3.5 text-emerald-400" />
                   Keamanan Data Aktif:
                 </p>
-                <p>Database histori aktif untuk pemantauan dan pengeditan, namun fungsi penghapusan dinonaktifkan demi keselamatan data.</p>
+                <p>Database histori aktif untuk pemantauan, pengeditan, serta alat penghapusan &amp; pengosongan data secara penuh.</p>
               </div>
             )}
 

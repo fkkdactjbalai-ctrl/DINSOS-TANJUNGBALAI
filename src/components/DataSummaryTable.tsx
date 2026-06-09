@@ -184,20 +184,18 @@ export default function DataSummaryTable({
                 Cadangkan Data (JSON)
               </button>
 
-              {userRole !== 'pendata' && (
-                <button
-                  id="btn-clear-database"
-                  type="button"
-                  onClick={() => {
-                    if (confirm('Apakah Anda yakin ingin menghapus seluruh basis data pendataan ini? Tindakan ini tidak bisa dibatalkan.')) {
-                      onClearAll();
-                    }
-                  }}
-                  className="bg-white hover:bg-red-50 border border-red-100 hover:border-red-200 text-red-650 text-red-600 rounded-xl text-xs font-semibold px-3 py-2.5 transition-all cursor-pointer select-none"
-                >
-                  Kosongkan Database
-                </button>
-              )}
+              <button
+                id="btn-clear-database"
+                type="button"
+                onClick={() => {
+                  if (confirm('Apakah Anda yakin ingin menghapus seluruh basis data pendataan ini? Tindakan ini tidak bisa dibatalkan.')) {
+                    onClearAll();
+                  }
+                }}
+                className="bg-white hover:bg-red-50 border border-red-100 hover:border-red-200 text-red-650 text-red-600 rounded-xl text-xs font-semibold px-3 py-2.5 transition-all cursor-pointer select-none"
+              >
+                Kosongkan Database
+              </button>
             </>
           )}
 
@@ -701,20 +699,18 @@ export default function DataSummaryTable({
                         <Edit2 className="h-4 w-4" />
                       </button>
 
-                      {userRole !== 'pendata' && (
-                        <button
-                          id={`btn-delete-${survey.id}`}
-                          onClick={() => {
-                            if (confirm(`Apakah Anda yakin ingin membuang data KK ${survey.noKK} atas nama ${survey.namaResponden}?`)) {
-                              onDelete(survey.id);
-                            }
-                          }}
-                          title="Hapus Rekaman"
-                          className="p-2 text-slate-450 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button
+                        id={`btn-delete-${survey.id}`}
+                        onClick={() => {
+                          if (confirm(`Apakah Anda yakin ingin membuang data KK ${survey.noKK} atas nama ${survey.namaResponden}?`)) {
+                            onDelete(survey.id);
+                          }
+                        }}
+                        title="Hapus Rekaman"
+                        className="p-2 text-slate-450 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>
