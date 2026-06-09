@@ -188,7 +188,7 @@ export default function DataSummaryTable({
                 id="btn-clear-database"
                 type="button"
                 onClick={() => {
-                  if (confirm('Apakah Anda yakin ingin menghapus seluruh basis data pendataan ini? Tindakan ini tidak bisa dibatalkan.')) {
+                  if (confirm('Apakah Anda yakin ingin menghapus seluruh data?')) {
                     onClearAll();
                   }
                 }}

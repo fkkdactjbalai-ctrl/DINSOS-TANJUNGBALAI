@@ -532,6 +532,21 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     setErrors([]);
   };
 
+  // Trigger form reset to ensure cached inputs, photos, and GPS coordinates are cleared
+  const resetForm = () => {
+    setFormData(opt.emptySurvey());
+    setCurrentSection(0);
+    setActiveMemberTabIdx(0);
+    setErrors([]);
+    setDraftLoaded(false);
+
+    // Clear draft storage specifically
+    if (username) {
+      saveUserDraftToFirestore(username, 0, null);
+      localStorage.removeItem(`dtsen_draft_${username}`);
+    }
+  };
+
   // Handle Submit Form
   const handleSubmitForm = (e: React.FormEvent) => {
     if (e && typeof e.preventDefault === 'function') {
@@ -563,20 +578,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
       }
       
       onSubmit(finalFormData);
-
-      // Clear draft since session completed successfully!
-      if (username) {
-        saveUserDraftToFirestore(username, 0, null);
-      }
-
-      // Reset form if it is a new submission (not edit)
-      if (!initialData) {
-        setFormData(opt.emptySurvey());
-        setCurrentSection(0);
-        setActiveMemberTabIdx(0);
-        setErrors([]);
-        setDraftLoaded(false);
-      }
+      resetForm();
     }
   };
 

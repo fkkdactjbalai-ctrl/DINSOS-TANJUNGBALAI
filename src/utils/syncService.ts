@@ -462,6 +462,33 @@ export async function deleteSurveyFromFirestore(id: string): Promise<boolean> {
 }
 
 /**
+ * Deletes all surveys from Firebase Firestore 'surveys' collection.
+ */
+export async function clearAllSurveysFromFirestore(): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return true;
+
+  try {
+    await ensureAuthenticated();
+    const querySnapshot = await getDocs(collection(db, 'surveys'));
+    const batchPromises: Promise<any>[] = [];
+    querySnapshot.forEach((docSnap) => {
+      if (docSnap.id !== '_setup_metadata') {
+        batchPromises.push(deleteDoc(docSnap.ref));
+      }
+    });
+    await Promise.all(batchPromises);
+    return true;
+  } catch (error) {
+    try {
+      handleFirestoreError(error, OperationType.DELETE, 'surveys');
+    } catch (errInfo) {
+      console.warn("Firestore clear all issue ignored in offline mode:", errInfo);
+    }
+    return false;
+  }
+}
+
+/**
  * Fetches a user document from Firestore's 'users' collection.
  * Supports online multi-device login validation and sync.
  */

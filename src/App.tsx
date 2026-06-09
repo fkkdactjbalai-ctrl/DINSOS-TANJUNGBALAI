@@ -12,6 +12,7 @@ import {
   fetchSurveysFromGoogleAppsScript,
   subscribeToSurveys,
   deleteSurveyFromFirestore,
+  clearAllSurveysFromFirestore,
   isFirebaseConfigured
 } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
@@ -113,9 +114,11 @@ export default function App() {
       setSurveys(prev => {
         const mergedDict: { [id: string]: SurveyData } = {};
         
-        // Seed with current local state
+        // Seed ONLY with current local unsynced surveys so deletions/clearing in Firestore propagate in real-time
         prev.forEach(s => {
-          mergedDict[s.id] = s;
+          if (!s.synced) {
+            mergedDict[s.id] = s;
+          }
         });
 
         // Merging updated cloud items
@@ -203,19 +206,20 @@ export default function App() {
     let targetSurveyId: string;
 
     if (editingSurvey) {
-      // Modify existing survey
-      targetSurveyId = submittedData.id;
-      updatedSurveys = surveys.map(s => {
-        if (s.id === submittedData.id) {
-          const entry = {
-            ...submittedData,
-            submittedAt: new Date().toISOString() // refresh submit date
-          };
-          finalSurveyToSync = entry;
-          return entry;
-        }
-        return s;
-      });
+       // Modify existing survey
+       targetSurveyId = submittedData.id;
+       updatedSurveys = surveys.map(s => {
+         if (s.id === submittedData.id) {
+           const entry = {
+             ...submittedData,
+             synced: false,
+             submittedAt: new Date().toISOString() // refresh submit date
+           };
+           finalSurveyToSync = entry;
+           return entry;
+         }
+         return s;
+       });
       showToast(`Data DTSEN KK ${submittedData.noKK} berhasil diperbarui di basis data!`, 'success');
       setEditingSurvey(null);
     } else {
@@ -417,6 +421,7 @@ export default function App() {
   const handleClearAll = () => {
     saveToLocalStorage([]);
     setEditingSurvey(null);
+    clearAllSurveysFromFirestore();
     showToast('Seluruh data DTSEN di LocalStorage berhasil dikosongkan.', 'danger');
   };
 
