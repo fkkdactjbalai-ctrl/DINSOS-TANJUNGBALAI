@@ -2,40 +2,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Global Safety Net default catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Helper: is authenticated
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // Helper: validates standard ID format and size
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    // Surveys Validation Helper
-    function isValidSurvey(data) {
-      return data.id is string && data.id.size() <= 128
-        && data.noKK is string && data.noKK.size() == 16
-        && data.namaResponden is string && data.namaResponden.size() <= 128;
-    }
-
-    // Surveys Collection Definition
     match /surveys/{surveyId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isValidId(surveyId) && isValidSurvey(request.resource.data);
-      allow delete: if true;
-      allow update: if isValidSurvey(request.resource.data) && (
-        // Action 1: Sync status change only (or simple sync)
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['synced', 'syncedAt']) ||
-        // Action 2: Professional modification / edit full fields (excluding id, createdAt)
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'submittedAt']))
-      );
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Default catch-all
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }

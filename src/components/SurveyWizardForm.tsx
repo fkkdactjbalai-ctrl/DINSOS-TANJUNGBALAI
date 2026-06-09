@@ -6,11 +6,13 @@ import {
 } from 'lucide-react';
 import { SurveyData, FamilyMember } from '../types';
 import * as opt from '../data/options';
+import { isFirebaseConfigured, fetchUserFromFirestore, saveUserDraftToFirestore } from '../utils/syncService';
 
 interface SurveyWizardFormProps {
   initialData?: SurveyData | null;
   onSubmit: (data: SurveyData) => void;
   onCancel?: () => void;
+  username?: string;
 }
 
 function mergeSurveyWithDefaults(survey: SurveyData | null | undefined): SurveyData {
@@ -38,7 +40,7 @@ function mergeSurveyWithDefaults(survey: SurveyData | null | undefined): SurveyD
   };
 }
 
-export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: SurveyWizardFormProps) {
+export default function SurveyWizardForm({ initialData, onSubmit, onCancel, username }: SurveyWizardFormProps) {
   // Define 5 Sections configuration
   const SECTIONS = [
     { title: 'Petugas & Lokasi', desc: 'Identitas petugas pendata dan koordinat sosiografis', icon: User },
@@ -69,6 +71,80 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
     setActiveMemberTabIdx(0);
     setErrors([]);
   }, [initialData]);
+
+  // Draft loader & Auto-save engines
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  // Restore Draft on login/mount
+  useEffect(() => {
+    if (!username || draftLoaded || initialData) return;
+
+    const restoreDraft = async () => {
+      try {
+        let currentStep = 0;
+        let draftData: any = null;
+
+        if (isFirebaseConfigured) {
+          const userData = await fetchUserFromFirestore(username);
+          if (userData && userData.current_step > 0 && userData.draft_data) {
+            currentStep = userData.current_step;
+            try {
+              draftData = JSON.parse(userData.draft_data);
+              console.info(`Fetched online draft at step ${currentStep} for ${username}`);
+            } catch (errJson) {
+              console.warn("Error parsing online draft:", errJson);
+            }
+          }
+        }
+
+        // Fallback or override using local storage backup if available and newer or if we're offline
+        const localDraftJson = localStorage.getItem(`dtsen_draft_${username}`);
+        if (localDraftJson) {
+          try {
+            const parsed = JSON.parse(localDraftJson);
+            // If offline or no online draft, load local one
+            if (!draftData || parsed.currentStep > currentStep) {
+              currentStep = parsed.currentStep || 0;
+              draftData = parsed.draftData;
+            }
+          } catch (eLocal) {
+            console.warn("Error parsing local draft:", eLocal);
+          }
+        }
+
+        if (draftData && currentStep > 0) {
+          setFormData(mergeSurveyWithDefaults(draftData));
+          setCurrentSection(currentStep);
+          setDraftLoaded(true);
+        } else {
+          // If no draft exists, mark loaded so we can start auto-saving from now on
+          setDraftLoaded(true);
+        }
+      } catch (err) {
+        console.warn("Restoring draft issue:", err);
+        setDraftLoaded(true);
+      }
+    };
+
+    restoreDraft();
+  }, [username, initialData, draftLoaded]);
+
+  // Debounced Auto-save to cloud & local on formData or section change
+  useEffect(() => {
+    if (!username || initialData) return;
+    
+    // Do not save immediately if we haven't loaded draft yet (to avoid overwriting with defaults)
+    if (!draftLoaded) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      // Safe Auto-Save draft
+      saveUserDraftToFirestore(username, currentSection, formData);
+    }, 1500); // 1.5 seconds debounce
+
+    return () => clearTimeout(timer);
+  }, [formData, currentSection, username, draftLoaded, initialData]);
 
   // Handle auto calculations of age when birthdate changes
   const calculateAge = (birthdate: string): number => {
@@ -417,12 +493,18 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
       
       onSubmit(finalFormData);
 
+      // Clear draft since session completed successfully!
+      if (username) {
+        saveUserDraftToFirestore(username, 0, null);
+      }
+
       // Reset form if it is a new submission (not edit)
       if (!initialData) {
         setFormData(opt.emptySurvey());
         setCurrentSection(0);
         setActiveMemberTabIdx(0);
         setErrors([]);
+        setDraftLoaded(false);
       }
     }
   };

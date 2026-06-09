@@ -22,6 +22,12 @@ export default function App() {
   const [userRole, setUserRole] = useState<'admin' | 'pendata' | null>(() => {
     return localStorage.getItem('dtsen_role') as 'admin' | 'pendata' | null;
   });
+  const [username, setUsername] = useState<string>(() => {
+    return localStorage.getItem('dtsen_username') || '';
+  });
+  const [fullname, setFullname] = useState<string>(() => {
+    return localStorage.getItem('dtsen_fullname') || '';
+  });
   const [surveys, setSurveys] = useState<SurveyData[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<SurveyData | null>(null);
   const [editingSurvey, setEditingSurvey] = useState<SurveyData | null>(null);
@@ -34,15 +40,25 @@ export default function App() {
     setAutoPrintActive(true);
   };
 
-  const handleLoginSuccess = (role: 'admin' | 'pendata') => {
+  const handleLoginSuccess = (role: 'admin' | 'pendata', uname: string, fname: string) => {
     localStorage.setItem('dtsen_role', role);
+    localStorage.setItem('dtsen_username', uname);
+    localStorage.setItem('dtsen_fullname', fname);
+    localStorage.setItem('dtsen_last_nama_pendata', fname);
+    
     setUserRole(role);
-    showToast(`Berhasil masuk sebagai ${role === 'admin' ? 'Administrator' : 'Petugas Pendata'}!`, 'success');
+    setUsername(uname);
+    setFullname(fname);
+    showToast(`Selamat datang ${fname}! Berhasil masuk sebagai ${role === 'admin' ? 'Administrator' : 'Petugas Pendata'}.`, 'success');
   };
 
   const handleLogout = () => {
     localStorage.removeItem('dtsen_role');
+    localStorage.removeItem('dtsen_username');
+    localStorage.removeItem('dtsen_fullname');
     setUserRole(null);
+    setUsername('');
+    setFullname('');
   };
 
   const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzRkb2HTPFyTc1XrlS77D5mtBmNRxs4RSD-67WQsjs4sDtwM_oLywREuwbKyWzSfvVvKA/exec';
@@ -539,6 +555,7 @@ export default function App() {
             initialData={editingSurvey} 
             onSubmit={handleSurveySubmit} 
             onCancel={editingSurvey ? () => setEditingSurvey(null) : undefined}
+            username={username}
           />
         </section>
 

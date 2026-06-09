@@ -10,7 +10,8 @@ import {
   getDocs, 
   deleteDoc, 
   onSnapshot, 
-  getDocFromServer
+  getDocFromServer,
+  updateDoc
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -420,6 +421,73 @@ export async function deleteSurveyFromFirestore(id: string): Promise<boolean> {
     } catch (errInfo) {
       console.warn("Firestore delete issue ignored in offline mode:", errInfo);
     }
+    return false;
+  }
+}
+
+/**
+ * Fetches a user document from Firestore's 'users' collection.
+ * Supports online multi-device login validation and sync.
+ */
+export async function fetchUserFromFirestore(username: string): Promise<any | null> {
+  if (!isFirebaseConfigured || !db) return null;
+  try {
+    await ensureAuthenticated();
+    const userDoc = await getDoc(doc(db, 'users', username));
+    if (userDoc.exists()) {
+      return userDoc.data();
+    }
+    return null;
+  } catch (error) {
+    console.warn("Error fetching user from Firestore:", error);
+    return null;
+  }
+}
+
+/**
+ * Creates/registers a user document in Firestore.
+ */
+export async function saveUserToFirestore(username: string, userData: any): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return false;
+  try {
+    await ensureAuthenticated();
+    await setDoc(doc(db, 'users', username), userData, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Error saving user to Firestore:", error);
+    return false;
+  }
+}
+
+/**
+ * Saves survey progress/draft data to Firestore of a user under 'users' collection.
+ */
+export async function saveUserDraftToFirestore(
+  username: string, 
+  currentStep: number, 
+  draftData: any
+): Promise<boolean> {
+  const serialized = draftData ? JSON.stringify(draftData) : null;
+  
+  if (!isFirebaseConfigured || !db) {
+    // If not configured, save locally only
+    localStorage.setItem(`dtsen_draft_${username}`, JSON.stringify({ currentStep, draftData }));
+    return true;
+  }
+  try {
+    await ensureAuthenticated();
+    await setDoc(doc(db, 'users', username), {
+      current_step: currentStep,
+      draft_data: serialized,
+      updated_at: new Date().toISOString()
+    }, { merge: true });
+    
+    // Also backup locally always
+    localStorage.setItem(`dtsen_draft_${username}`, JSON.stringify({ currentStep, draftData }));
+    return true;
+  } catch (error) {
+    console.warn("Unable to save draft to Firestore, backed up locally:", error);
+    localStorage.setItem(`dtsen_draft_${username}`, JSON.stringify({ currentStep, draftData }));
     return false;
   }
 }
