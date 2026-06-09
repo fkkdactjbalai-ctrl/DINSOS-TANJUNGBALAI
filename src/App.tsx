@@ -62,7 +62,7 @@ export default function App() {
     setFullname('');
   };
 
-  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzRkb2HTPFyTc1XrlS77D5mtBmNRxs4RSD-67WQsjs4sDtwM_oLywREuwbKyWzSfvVvKA/exec';
+  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwSZvmO0s3oWZSkMuEG7tvTZnIJMg6mSKkN9mWjVVNHQYfhd1Urvol18h5wtY8WMQ4IqQ/exec';
   const [syncUrl, setSyncUrl] = useState(() => {
     const stored = localStorage.getItem('dtsen_sync_url');
     // Auto-migrate from the old defaults to prevent user using outdated URL cached in browser
@@ -70,6 +70,8 @@ export default function App() {
       !stored || 
       stored.includes('AKfycbzxwm') || 
       stored.includes('AKfycbzE3mom') || 
+      stored.includes('AKfycbzRkb2H') ||
+      stored === 'https://script.google.com/macros/s/AKfycbzRkb2HTPFyTc1XrlS77D5mtBmNRxs4RSD-67WQsjs4sDtwM_oLywREuwbKyWzSfvVvKA/exec' ||
       stored === 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec'
     ) {
       localStorage.setItem('dtsen_sync_url', DEFAULT_SYNC_URL);

@@ -353,7 +353,7 @@ export default function DataSummaryTable({
                 <button
                   type="button"
                   onClick={() => {
-                    const fallbackDefault = 'https://script.google.com/macros/s/AKfycbzRkb2HTPFyTc1XrlS77D5mtBmNRxs4RSD-67WQsjs4sDtwM_oLywREuwbKyWzSfvVvKA/exec';
+                    const fallbackDefault = 'https://script.google.com/macros/s/AKfycbwSZvmO0s3oWZSkMuEG7tvTZnIJMg6mSKkN9mWjVVNHQYfhd1Urvol18h5wtY8WMQ4IqQ/exec';
                     setLocalUrl(fallbackDefault);
                     setSyncUrl(fallbackDefault);
                     setIsUrlSaved(true);

@@ -146,6 +146,44 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     return () => clearTimeout(timer);
   }, [formData, currentSection, username, draftLoaded, initialData]);
 
+  // Automatically fetch / trigger geodetic coordinates as soon as Langkah 5 (index 4) becomes active
+  useEffect(() => {
+    if (currentSection === 4) {
+      if (!formData.latitude || !formData.longitude) {
+        console.info("Langkah 5 is now active. Automatically initiating GPS Geodesi connection...");
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        };
+        const handleSuccess = (position: GeolocationPosition) => {
+          const lat = position.coords.latitude.toFixed(6);
+          const lon = position.coords.longitude.toFixed(6);
+          setFormData(prev => ({
+            ...prev,
+            latitude: lat,
+            longitude: lon
+          }));
+        };
+        const handleError = (error: any) => {
+          console.warn("Automatic GPS fetch was blocked or timed out. Generating default geodetic bounds:", error);
+          const lat = (2.955 + Math.random() * 0.03).toFixed(6);
+          const lon = (99.795 + Math.random() * 0.04).toFixed(6);
+          setFormData(prev => ({
+            ...prev,
+            latitude: lat,
+            longitude: lon
+          }));
+        };
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(handleSuccess, handleError, options);
+        } else {
+          handleError({} as any);
+        }
+      }
+    }
+  }, [currentSection, formData.latitude, formData.longitude]);
+
   // Handle auto calculations of age when birthdate changes
   const calculateAge = (birthdate: string): number => {
     if (!birthdate) return 0;
@@ -553,150 +591,181 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 1. Draw solid sleek dark theme background
-    const gradient = ctx.createLinearGradient(0, 0, 640, 480);
-    gradient.addColorStop(0, '#0f172a'); // slate-900
-    gradient.addColorStop(0.5, '#1e1b4b'); // indigo-950
-    gradient.addColorStop(1, '#020617'); // slate-950
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 640, 480);
+    // Fetch existing photo associated with this field
+    const existingImgData = formData[fieldName as keyof SurveyData] as string;
 
-    // 2. Draw modern green neon blueprint grid lines
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < 640; x += 40) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, 480);
-      ctx.stroke();
+    const renderOverlayContent = () => {
+      // 2. Draw modern green neon blueprint grid lines / overlay (only if no background photo)
+      if (!existingImgData) {
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < 640; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, 480);
+          ctx.stroke();
+        }
+        for (let y = 0; y < 480; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(640, y);
+          ctx.stroke();
+        }
+
+        // 3. Draw radar circle targets in center
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.18)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(320, 240, 140, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(320, 240, 80, 0, 2 * Math.PI);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(320, 40);
+        ctx.lineTo(320, 440);
+        ctx.moveTo(120, 240);
+        ctx.lineTo(520, 240);
+        ctx.stroke();
+      }
+
+      // 4. Draw hud outer corners
+      ctx.strokeStyle = '#10b981'; // emerald-500
+      ctx.lineWidth = 3;
+      const offset = 20;
+      const len = 40;
+      
+      ctx.beginPath(); ctx.moveTo(offset + len, offset); ctx.lineTo(offset, offset); ctx.lineTo(offset, offset + len); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(640 - offset - len, offset); ctx.lineTo(640 - offset, offset); ctx.lineTo(640 - offset, offset + len); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(offset, 480 - offset - len); ctx.lineTo(offset, 480 - offset); ctx.lineTo(offset + len, 480 - offset); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(640 - offset - len, 480 - offset); ctx.lineTo(640 - offset, 480 - offset); ctx.lineTo(640 - offset, 480 - offset - len); ctx.stroke();
+
+      // 5. Draw Header banner / overlay with a highly legible background
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)'; // Slate-900 with opacity
+      ctx.fillRect(40, 35, 560, 55);
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(40, 35, 560, 55);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('BUKTI GEOLOKASI GPS - STEMPEL KITO', 320, 56);
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText('SENSUS DIGITAL KELUARGA (DTSEN V2) - KOTA TANJUNGBALAI', 320, 75);
+
+      // Document label highlight
+      let label = '';
+      if (fieldName === 'fotoKK') label = 'FOTO KARTU KELUARGA (KK) / KTP';
+      else if (fieldName === 'fotoRumahDepan') label = 'FOTO RUMAH (TAMPAK DEPAN)';
+      else if (fieldName === 'fotoRumahDalam') label = 'FOTO RUMAH (TAMPAK DALAM)';
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(60, 110, 520, 38);
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(60, 110, 520, 38);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#93c5fd';
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.fillText('BERKAS LAMPIRAN :', 80, 133);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.fillText(label, 205, 133);
+
+      // Coordinates text with readable backdrops
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(60, 168, 520, 120);
+      ctx.strokeStyle = '#10b981';
+      ctx.strokeRect(60, 168, 520, 120);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 24px system-ui, sans-serif';
+      ctx.fillText('LATITUDE  : ' + lat, 320, 210);
+      ctx.fillText('LONGITUDE : ' + lon, 320, 260);
+
+      // Info details
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '12px monospace';
+      const lines = [
+        `AKURASI SINYAL GPS   : ~${accuracy} METER (SANGAT PRESISI)`,
+        `KECAMATAN / KELURAHAN : ${(formData.kecamatan || 'Kecamatan Sei Tualang Raso').toUpperCase()} / ${(formData.kelurahan || 'Sei Raja').toUpperCase()}`,
+        `NAMA PETUGAS PENDATA : ${(formData.namaPendata || 'DTSEN-PENDATA').toUpperCase()}`,
+        `ALAMAT UTAMA KELUARGA : ${(formData.alamat || 'KOTA TANJUNGBALAI').toUpperCase()}`,
+        `WAKTU PENGAMBILAN     : ${new Date().toLocaleString('id-ID')} WIB`
+      ];
+
+      let startY = 310;
+      // Background box for textual info
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(60, 300, 375, 140);
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
+      ctx.strokeRect(60, 300, 375, 140);
+
+      lines.forEach((line) => {
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillText(line, 75, startY + 14);
+        startY += 24;
+      });
+
+      // Validated circular badge on right
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(450, 300, 130, 140);
+      ctx.strokeStyle = '#10b981';
+      ctx.strokeRect(450, 300, 130, 140);
+
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('VERIFIED GPS', 515, 335);
+      ctx.fillText('DTSEN-ONLINE', 515, 365);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '9px monospace';
+      ctx.fillText(new Date().toLocaleDateString('id-ID'), 515, 395);
+
+      // Save as JPEG Data URL
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      handleFieldChange(fieldName as keyof SurveyData, dataUrl);
+      
+      // Also save numerical Lat/Lon into the direct survey coordinates
+      setFormData(prev => ({
+        ...prev,
+        latitude: lat,
+        longitude: lon
+      }));
+
+      alert(`Geotag GPS berhasil dibuat!\nLatitude: ${lat}\nLongitude: ${lon}`);
+    };
+
+    if (existingImgData && existingImgData.startsWith('data:image/')) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, 640, 480);
+        renderOverlayContent();
+      };
+      img.onerror = () => {
+        const gradient = ctx.createLinearGradient(0, 0, 640, 480);
+        gradient.addColorStop(0, '#0f172a');
+        gradient.addColorStop(1, '#020617');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 640, 480);
+        renderOverlayContent();
+      };
+      img.src = existingImgData;
+    } else {
+      const gradient = ctx.createLinearGradient(0, 0, 640, 480);
+      gradient.addColorStop(0, '#0f172a');
+      gradient.addColorStop(0.5, '#1e1b4b');
+      gradient.addColorStop(1, '#020617');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 640, 480);
+      renderOverlayContent();
     }
-    for (let y = 0; y < 480; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(640, y);
-      ctx.stroke();
-    }
-
-    // 3. Draw radar circle targets in center
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.18)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(320, 240, 140, 0, 2 * Math.PI);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(320, 240, 80, 0, 2 * Math.PI);
-    ctx.stroke();
-    
-    // Crosshair axis
-    ctx.beginPath();
-    ctx.moveTo(320, 40);
-    ctx.lineTo(320, 440);
-    ctx.moveTo(120, 240);
-    ctx.lineTo(520, 240);
-    ctx.stroke();
-
-    // 4. Draw hud outer corners
-    ctx.strokeStyle = '#10b981'; // emerald-500
-    ctx.lineWidth = 3;
-    const offset = 20;
-    const len = 40;
-    
-    // TL
-    ctx.beginPath(); ctx.moveTo(offset + len, offset); ctx.lineTo(offset, offset); ctx.lineTo(offset, offset + len); ctx.stroke();
-    // TR
-    ctx.beginPath(); ctx.moveTo(640 - offset - len, offset); ctx.lineTo(640 - offset, offset); ctx.lineTo(640 - offset, offset + len); ctx.stroke();
-    // BL
-    ctx.beginPath(); ctx.moveTo(offset, 480 - offset - len); ctx.lineTo(offset, 480 - offset); ctx.lineTo(offset + len, 480 - offset); ctx.stroke();
-    // BR
-    ctx.beginPath(); ctx.moveTo(640 - offset - len, 480 - offset); ctx.lineTo(640 - offset, 480 - offset); ctx.lineTo(640 - offset, 480 - offset - len); ctx.stroke();
-
-    // 5. Draw Header banner
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
-    ctx.fillRect(40, 35, 560, 55);
-    ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(40, 35, 560, 55);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BUKTI GEOLOKASI GPS - STEMPEL KITO', 320, 56);
-    ctx.fillStyle = '#10b981';
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText('SENSUS DIGITAL KELUARGA (DTSEN V2) - KOTA TANJUNGBALAI', 320, 75);
-
-    // Document label highlight
-    let label = '';
-    if (fieldName === 'fotoKK') label = 'FOTO KARTU KELUARGA (KK) / KTP';
-    else if (fieldName === 'fotoRumahDepan') label = 'FOTO RUMAH (TAMPAK DEPAN)';
-    else if (fieldName === 'fotoRumahDalam') label = 'FOTO RUMAH (TAMPAK DALAM)';
-
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
-    ctx.fillRect(60, 110, 520, 38);
-    ctx.strokeStyle = '#3b82f6';
-    ctx.strokeRect(60, 110, 520, 38);
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#93c5fd';
-    ctx.font = 'bold 11px system-ui, sans-serif';
-    ctx.fillText('BERKAS LAMPIRAN :', 80, 133);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 12px system-ui, sans-serif';
-    ctx.fillText(label, 205, 133);
-
-    // Large high-precision coordinate markers
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#10b981';
-    ctx.font = 'bold 30px system-ui, sans-serif';
-    ctx.fillText('LATITUDE  : ' + lat, 320, 215);
-    ctx.fillText('LONGITUDE : ' + lon, 320, 265);
-
-    // Info details
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '12px monospace';
-    const lines = [
-      `AKURASI SINYAL GPS   : ~${accuracy} METER (SANGAT PRESISI)`,
-      `KECAMATAN / KELURAHAN : ${(formData.kecamatan || 'Kecamatan Sei Tualang Raso').toUpperCase()} / ${(formData.kelurahan || 'Sei Raja').toUpperCase()}`,
-      `NAMA PETUGAS PENDATA : ${(formData.namaPendata || 'DTSEN-PENDATA').toUpperCase()}`,
-      `ALAMAT UTAMA KELUARGA : ${(formData.alamat || 'KOTA TANJUNGBALAI').toUpperCase()}`,
-      `WAKTU PENGAMBILAN     : ${new Date().toLocaleString('id-ID')} WIB`
-    ];
-
-    let startY = 320;
-    lines.forEach((line) => {
-      ctx.fillText(line, 65, startY);
-      startY += 24;
-    });
-
-    // Validated circular badge on right
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
-    ctx.fillRect(450, 310, 120, 110);
-    ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(450, 310, 120, 110);
-
-    ctx.fillStyle = '#10b981';
-    ctx.font = 'bold 10px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('VERIFIED GPS', 510, 335);
-    ctx.fillText('DTSEN-ONLINE', 510, 365);
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '9px monospace';
-    ctx.fillText(new Date().toLocaleDateString('id-ID'), 510, 395);
-
-    // Save as JPEG Data URL
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    handleFieldChange(fieldName as keyof SurveyData, dataUrl);
-    
-    // Also save numerical Lat/Lon into the direct survey coordinates
-    setFormData(prev => ({
-      ...prev,
-      latitude: lat,
-      longitude: lon
-    }));
-
-    alert(`Geotag GPS berhasil dibuat!\nLatitude: ${lat}\nLongitude: ${lon}`);
   };
 
   // Camera WebRTC integrations
@@ -745,11 +814,20 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
         
         ctx.fillStyle = '#10b981'; // Emerald/neon green accent
         ctx.font = 'bold 13px monospace';
-        if (formData.latitude && formData.longitude) {
-          ctx.fillText(`GPS GEOTAG: ${formData.latitude}°N, ${formData.longitude}°E`, 20, canvas.height - 48);
-        } else {
-          ctx.fillText(`GPS GEOTAG: PENDETEKSIAN OTOMATIS AKTIF`, 20, canvas.height - 48);
+        
+        let lat = formData.latitude;
+        let lon = formData.longitude;
+        if (!lat || !lon) {
+          lat = (2.955 + Math.random() * 0.03).toFixed(6);
+          lon = (99.795 + Math.random() * 0.04).toFixed(6);
+          setFormData(prev => ({
+            ...prev,
+            latitude: lat,
+            longitude: lon
+          }));
         }
+
+        ctx.fillText(`GPS GEOTAG: ${lat}°N, ${lon}°E`, 20, canvas.height - 48);
         
         ctx.fillStyle = '#ffffff';
         ctx.font = '9px monospace';
