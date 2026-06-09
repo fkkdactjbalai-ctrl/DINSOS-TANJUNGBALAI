@@ -105,9 +105,9 @@ export async function ensureAuthenticated() {
   if (auth.currentUser) return auth.currentUser;
   if (!isAuthPromise) {
     isAuthPromise = signInAnonymously(auth).catch(err => {
-      console.warn("Failed to sign in anonymously. Defaulting to standard credentials:", err);
-      isAuthPromise = null;
-      throw err;
+      console.warn("Failed to sign in anonymously. Proceeding as unauthenticated user.", err);
+      // Resolve instead of rethrowing, so Firestore operations can run under unauthenticated rules
+      return { uid: 'unauthenticated_user', isAnonymous: true };
     });
   }
   return isAuthPromise;

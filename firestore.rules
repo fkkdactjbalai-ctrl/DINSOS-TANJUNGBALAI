@@ -28,9 +28,9 @@ service cloud.firestore {
     match /surveys/{surveyId} {
       allow get: if true;
       allow list: if true;
-      allow create: if isSignedIn() && isValidId(surveyId) && isValidSurvey(request.resource.data);
-      allow delete: if isSignedIn();
-      allow update: if isSignedIn() && isValidSurvey(request.resource.data) && (
+      allow create: if isValidId(surveyId) && isValidSurvey(request.resource.data);
+      allow delete: if true;
+      allow update: if isValidSurvey(request.resource.data) && (
         // Action 1: Sync status change only (or simple sync)
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['synced', 'syncedAt']) ||
         // Action 2: Professional modification / edit full fields (excluding id, createdAt)

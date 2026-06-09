@@ -576,7 +576,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
     const lines = [
       `AKURASI SINYAL GPS   : ~${accuracy} METER (SANGAT PRESISI)`,
       `KECAMATAN / KELURAHAN : ${(formData.kecamatan || 'Kecamatan Sei Tualang Raso').toUpperCase()} / ${(formData.kelurahan || 'Sei Raja').toUpperCase()}`,
-      `ID PETUGAS LAPANGAN   : STEMPEL KITO TANJUNGBALAI (ID 01)`,
+      `NAMA PETUGAS PENDATA : ${(formData.namaPendata || 'DTSEN-PENDATA').toUpperCase()}`,
       `ALAMAT UTAMA KELUARGA : ${(formData.alamat || 'KOTA TANJUNGBALAI').toUpperCase()}`,
       `WAKTU PENGAMBILAN     : ${new Date().toLocaleString('id-ID')} WIB`
     ];
