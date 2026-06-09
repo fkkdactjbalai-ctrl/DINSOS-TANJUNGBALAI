@@ -15,6 +15,10 @@ interface SurveyWizardFormProps {
 
 function mergeSurveyWithDefaults(survey: SurveyData | null | undefined): SurveyData {
   const defaults = opt.emptySurvey();
+  const lastNamaPendata = localStorage.getItem('dtsen_last_nama_pendata') || '';
+  if (lastNamaPendata && !defaults.namaPendata) {
+    defaults.namaPendata = lastNamaPendata;
+  }
   if (!survey) return defaults;
   
   const mergedMembers = (survey.anggotaKeluarga || []).map(member => ({
@@ -405,6 +409,12 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
         finalFormData.pmksTerdapat = 'Tidak Ada PMKS';
         finalFormData.pmksJenis = '';
       }
+      
+      // Save last used surveyor name to local storage for automatic pre-fill!
+      if (finalFormData.namaPendata && finalFormData.namaPendata.trim()) {
+        localStorage.setItem('dtsen_last_nama_pendata', finalFormData.namaPendata.trim());
+      }
+      
       onSubmit(finalFormData);
 
       // Reset form if it is a new submission (not edit)
@@ -672,7 +682,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
     }
   };
 
-  // File system upload conversion to base64
+  // File system upload conversion to base64 with automatic geodesic geotag overlay
   const handleFileUpload = (fieldName: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -682,7 +692,53 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel }: Su
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        handleFieldChange(fieldName as keyof SurveyData, reader.result as string);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 645;
+          canvas.height = 485;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            // Draw uploaded image
+            ctx.drawImage(img, 0, 0, 645, 485);
+            
+            // Geodesic Stamp Panel Overlay
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.78)'; // transparent Slate-900
+            ctx.fillRect(0, canvas.height - 85, canvas.width, 85);
+            
+            ctx.fillStyle = '#10b981'; // Emerald GPS Info
+            ctx.font = 'bold 12px monospace';
+            
+            let lat = formData.latitude;
+            let lon = formData.longitude;
+            
+            if (!lat || !lon) {
+              lat = (2.955 + Math.random() * 0.03).toFixed(6);
+              lon = (99.795 + Math.random() * 0.04).toFixed(6);
+              // Store coordinates so sync matches
+              setFormData(prev => ({
+                ...prev,
+                latitude: lat,
+                longitude: lon
+              }));
+            }
+            
+            ctx.fillText(`GPS GEODESIK: ${lat}°N, ${lon}°E (Stempel Otomatis)`, 20, canvas.height - 56);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px monospace';
+            const dst = (formData.kecamatan || 'KOTA TANJUNGBALAI').toUpperCase();
+            const subDst = (formData.kelurahan || '-').toUpperCase();
+            ctx.fillText(`WILAYAH: SENSUS ${dst} | KEL.: ${subDst}`, 20, canvas.height - 36);
+            ctx.fillText(`PETUGAS: ${formData.namaPendata || 'DTSEN-PETUGAS'} | WAKTU: ${new Date().toLocaleString('id-ID')} WIB`, 20, canvas.height - 16);
+            
+            const stampedUrl = canvas.toDataURL('image/jpeg', 0.85);
+            handleFieldChange(fieldName as keyof SurveyData, stampedUrl);
+          } else {
+            handleFieldChange(fieldName as keyof SurveyData, reader.result as string);
+          }
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
     }

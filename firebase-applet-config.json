@@ -1,9 +1,10 @@
 {
-  "apiKey": "AIzaSyFakeKeyPlaceholderForApplet_12345",
-  "authDomain": "sensus-keluarga.firebaseapp.com",
-  "projectId": "sensus-keluarga",
-  "storageBucket": "sensus-keluarga.appspot.com",
-  "messagingSenderId": "123456789",
-  "appId": "1:12345:web:abcdef",
-  "firestoreDatabaseId": "(default)"
+  "projectId": "sturdy-factor-m6m9v",
+  "appId": "1:835420103695:web:dec823ce80bc8a5ed9ef7a",
+  "apiKey": "AIzaSyB8ctVqfjza0UdlTeKEySvh89ud9vc3JfU",
+  "authDomain": "sturdy-factor-m6m9v.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-227ee858-2718-4d4c-beee-3c7eb807c0e2",
+  "storageBucket": "sturdy-factor-m6m9v.firebasestorage.app",
+  "messagingSenderId": "835420103695",
+  "measurementId": ""
 }

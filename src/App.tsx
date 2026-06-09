@@ -11,7 +11,8 @@ import {
   sendSurveyToGoogleAppsScript, 
   fetchSurveysFromGoogleAppsScript,
   subscribeToSurveys,
-  deleteSurveyFromFirestore
+  deleteSurveyFromFirestore,
+  isFirebaseConfigured
 } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
@@ -213,6 +214,29 @@ export default function App() {
     }
 
     saveToLocalStorage(updatedSurveys);
+
+    // Write directly to Firestore if online
+    if (isFirebaseConfigured) {
+      sendSurveyToGoogleAppsScript(syncUrl, finalSurveyToSync).then(res => {
+        if (res.success) {
+          setSurveys(prev => {
+            const updated = prev.map(item => {
+              if (item.id === targetSurveyId) {
+                return { ...item, synced: true, syncedAt: new Date().toISOString() };
+              }
+              return item;
+            });
+            localStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
+            return updated;
+          });
+          showToast(`Sinkronisasi cloud otomatis sukses untuk No KK ${finalSurveyToSync.noKK}!`, 'success');
+        } else {
+          showToast(`Tersimpan lokal. Antrean sinkronisasi cloud: ${res.message}`, 'info');
+        }
+      }).catch(err => {
+        console.warn('Direct cloud sync failed on submission:', err);
+      });
+    }
 
     // Scroll smoothly to the summary database table for verification
     setTimeout(() => {
