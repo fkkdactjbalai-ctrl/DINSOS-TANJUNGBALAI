@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shield, UserCheck, KeyRound, AlertCircle, Eye, EyeOff, Lock, HeartHandshake, UserPlus, LogIn, ChevronRight } from 'lucide-react';
 import { isFirebaseConfigured, fetchUserFromFirestore, saveUserToFirestore } from '../utils/syncService';
 
@@ -23,6 +23,62 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Automated background seeding of default system accounts to Cloud Firestore & Local storage
+  useEffect(() => {
+    const seedDefaultAccounts = async () => {
+      try {
+        const seedAdmin = {
+          username: 'slrttanjungbalai',
+          fullname: 'ADMINISTRATOR PPKS',
+          password: 'SLRTKITO9102',
+          role: 'admin',
+          isApproved: true,
+          created_at: new Date().toISOString()
+        };
+
+        const seedFasilitator = {
+          username: 'fasilitator slrt',
+          fullname: 'FASILITATOR SLRT',
+          password: 'FS2026',
+          role: 'pendata',
+          isApproved: true,
+          created_at: new Date().toISOString()
+        };
+
+        // Always save to offline local storage to ensure instant offline access
+        try {
+          const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+          const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+          let changed = false;
+          
+          if (!offlineUsers['slrttanjungbalai']) {
+            offlineUsers['slrttanjungbalai'] = seedAdmin;
+            changed = true;
+          }
+          if (!offlineUsers['fasilitator slrt']) {
+            offlineUsers['fasilitator slrt'] = seedFasilitator;
+            changed = true;
+          }
+          if (changed) {
+            localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+          }
+        } catch (e) {
+          console.warn("Offline local seeding warning:", e);
+        }
+
+        // Always attempt online seeding to Cloud Firestore database if available
+        if (isFirebaseConfigured) {
+          await saveUserToFirestore('slrttanjungbalai', seedAdmin);
+          await saveUserToFirestore('fasilitator slrt', seedFasilitator);
+        }
+      } catch (err) {
+        console.warn("Background seeding warning:", err);
+      }
+    };
+
+    seedDefaultAccounts();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +128,17 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             };
             await saveUserToFirestore('slrttanjungbalai', seedAdmin);
             onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
+          } else if (roleSelection === 'pendata' && (username.trim().toLowerCase() === 'fasilitator slrt' || username.trim().toLowerCase() === 'fasilitatorslrt') && password === 'FS2026') {
+            const seedPendata = {
+              username: 'fasilitator slrt',
+              fullname: 'FASILITATOR SLRT',
+              password: 'FS2026',
+              role: 'pendata',
+              isApproved: true,
+              created_at: new Date().toISOString()
+            };
+            await saveUserToFirestore('fasilitator slrt', seedPendata);
+            onLoginSuccess('pendata', 'fasilitator slrt', 'FASILITATOR SLRT');
           } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
             onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
           } else {
@@ -104,6 +171,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           // Hardcoded fallback
           if (roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102') {
             onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
+          } else if (roleSelection === 'pendata' && (username.trim().toLowerCase() === 'fasilitator slrt' || username.trim().toLowerCase() === 'fasilitatorslrt') && password === 'FS2026') {
+            onLoginSuccess('pendata', 'fasilitator slrt', 'FASILITATOR SLRT');
           } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
             onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
           } else {
@@ -117,6 +186,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       // Bypass offline for fast demo / recovery
       if (roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102') {
         onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
+      } else if (roleSelection === 'pendata' && (username.trim().toLowerCase() === 'fasilitator slrt' || username.trim().toLowerCase() === 'fasilitatorslrt') && password === 'FS2026') {
+        onLoginSuccess('pendata', 'fasilitator slrt', 'FASILITATOR SLRT');
       } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
         onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
       } else {
