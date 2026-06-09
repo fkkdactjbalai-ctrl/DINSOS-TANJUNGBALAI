@@ -162,7 +162,7 @@ export default function DataSummaryTable({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {surveys.length > 0 && (
+          {surveys.length > 0 && userRole === 'admin' && (
             <>
               <button
                 id="btn-export-all-all-csv"
@@ -205,7 +205,7 @@ export default function DataSummaryTable({
             </>
           )}
 
-          {surveys.length === 0 && (
+          {surveys.length === 0 && userRole === 'admin' && (
             <button
               id="btn-seed-data"
               type="button"
