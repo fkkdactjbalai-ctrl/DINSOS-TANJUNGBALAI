@@ -448,13 +448,75 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
  * Creates/registers a user document in Firestore.
  */
 export async function saveUserToFirestore(username: string, userData: any): Promise<boolean> {
-  if (!isFirebaseConfigured || !db) return false;
+  if (!isFirebaseConfigured || !db) {
+    // Save to local storage offline users too
+    try {
+      const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+      const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+      offlineUsers[username.toLowerCase()] = { ...offlineUsers[username.toLowerCase()], ...userData };
+      localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+    } catch (e) {
+      console.warn(e);
+    }
+    return true;
+  }
   try {
     await ensureAuthenticated();
     await setDoc(doc(db, 'users', username), userData, { merge: true });
     return true;
   } catch (error) {
-    console.error("Error saving user to Firestore:", error);
+    console.error("Error saving user to Firestore: ", error);
+    handleFirestoreError(error, OperationType.WRITE, `users/${username}`);
+    return false;
+  }
+}
+
+/**
+ * Fetches all users from Firestore or offline backup for admin control approval.
+ */
+export async function fetchAllUsersFromFirestore(): Promise<any[]> {
+  if (!isFirebaseConfigured || !db) {
+    const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+    const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+    return Object.values(offlineUsers);
+  }
+  try {
+    await ensureAuthenticated();
+    const querySnapshot = await getDocs(collection(db, 'users'));
+    const list: any[] = [];
+    querySnapshot.forEach((docSnap) => {
+      list.push(docSnap.data());
+    });
+    return list;
+  } catch (error) {
+    console.warn("Unable to fetch all users online, loading offline local list:", error);
+    const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+    const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+    return Object.values(offlineUsers);
+  }
+}
+
+/**
+ * Delete a user account from Firestore 'users' collection (Admin only).
+ */
+export async function deleteUserFromFirestore(username: string): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) {
+    try {
+      const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+      const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+      delete offlineUsers[username.toLowerCase()];
+      localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+  try {
+    await ensureAuthenticated();
+    await deleteDoc(doc(db, 'users', username));
+    return true;
+  } catch (error) {
+    console.error("Error deleting user from Firestore:", error);
     return false;
   }
 }

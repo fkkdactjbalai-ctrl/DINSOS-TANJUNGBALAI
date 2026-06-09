@@ -17,6 +17,7 @@ import {
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
 import QuickStats from './components/QuickStats';
+import AdminUserApprovalPanel from './components/AdminUserApprovalPanel';
 
 export default function App() {
   const [userRole, setUserRole] = useState<'admin' | 'pendata' | null>(() => {
@@ -530,6 +531,13 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {/* Admin User Approval Management Panel */}
+        {userRole === 'admin' && (
+          <section id="user-approval-panel-section" className="space-y-4">
+            <AdminUserApprovalPanel onShowToast={showToast} currentUser={username} />
+          </section>
+        )}
 
         {/* Wizard Form Section */}
         <section id="wizard-form-section" className="space-y-4">

@@ -50,15 +50,29 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               setIsLoading(false);
               return;
             }
+            if (userData.role === 'pendata' && userData.isApproved === false) {
+              setError('Akses Ditangguhkan: Pendaftaran Akun Anda belum disetujui oleh Administrator (SLRTTANJUNGBALAI). Silakan hubungi admin Anda.');
+              setIsLoading(false);
+              return;
+            }
             onLoginSuccess(userData.role, userData.username, userData.fullname || userData.username.toUpperCase());
           } else {
             setError('Sandi Pengaman tidak valid untuk akun ini!');
           }
         } else {
           // Fallback check: default credentials for convenience
-          if (roleSelection === 'admin' && username.toLowerCase() === 'admin' && password === 'SLRTKITO9102') {
-            onLoginSuccess('admin', 'admin', 'ADMINISTRATOR');
-          } else if (roleSelection === 'pendata' && username.toLowerCase() === 'pendata' && password === 'FS2026') {
+          if (roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102') {
+            const seedAdmin = {
+              username: 'slrttanjungbalai',
+              fullname: 'ADMINISTRATOR PPKS',
+              password: 'SLRTKITO9102',
+              role: 'admin',
+              isApproved: true,
+              created_at: new Date().toISOString()
+            };
+            await saveUserToFirestore('slrttanjungbalai', seedAdmin);
+            onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
+          } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
             onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
           } else {
             setError('Akun tidak ditemukan di cloud database. Silakan ganti tab ke "Daftar Akun" di atas terlebih dahulu.');
@@ -77,16 +91,21 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               setIsLoading(false);
               return;
             }
+            if (localUser.role === 'pendata' && localUser.isApproved === false) {
+              setError('Akses Ditangguhkan: Akun Anda belum disetujui oleh Administrator (SLRTTANJUNGBALAI).');
+              setIsLoading(false);
+              return;
+            }
             onLoginSuccess(localUser.role, localUser.username, localUser.fullname);
           } else {
             setError('Sandi Pengaman salah!');
           }
         } else {
           // Hardcoded fallback
-          if (roleSelection === 'admin' && password === 'SLRTKITO9102') {
-            onLoginSuccess('admin', username.trim(), 'ADMINISTRATOR');
-          } else if (roleSelection === 'pendata' && password === 'FS2026') {
-            onLoginSuccess('pendata', username.trim(), username.toUpperCase());
+          if (roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102') {
+            onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
+          } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
+            onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
           } else {
             setError('Sandi Pengaman atau Username salah!');
           }
@@ -96,12 +115,12 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       console.error(err);
       setError('Koneksi terganggu. Menggunakan bypass offline...');
       // Bypass offline for fast demo / recovery
-      if (roleSelection === 'admin' && password === 'SLRTKITO9102') {
-        onLoginSuccess('admin', username.trim(), 'ADMINISTRATOR');
-      } else if (roleSelection === 'pendata' && password === 'FS2026') {
-        onLoginSuccess('pendata', username.trim(), username.toUpperCase());
+      if (roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102') {
+        onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
+      } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
+        onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
       } else {
-        setError('Keamanan Sensus: Gagal menghubungi database. Sandi bypass default: Admin (SLRTKITO9102), Pendata (FS2026).');
+        setError('Keamanan Sensus: Gagal menghubungi database. Hubungi Administrator (SLRTTANJUNGBALAI - SLRTKITO9102)');
       }
     } finally {
       setIsLoading(false);
@@ -135,6 +154,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         fullname: regFullname.trim(),
         password: regPassword,
         role: roleSelection,
+        isApproved: roleSelection === 'admin',
         current_step: 0,
         draft_data: null,
         created_at: new Date().toISOString()
@@ -151,7 +171,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         const successSave = await saveUserToFirestore(formattedUsername, newUser);
         if (successSave) {
-          setSuccess(`Pendaftaran Akun ${roleSelection.toUpperCase()} Sukses di Cloud! Silakan masuk.`);
+          if (roleSelection === 'pendata') {
+            setSuccess(`Registrasi Berhasil! Akun Petugas Pendata Anda saat ini MENUNGGU PERSETUJUAN dari Administrator (SLRTTANJUNGBALAI) sebelum dapat masuk.`);
+          } else {
+            setSuccess(`Pendaftaran Akun Administrator Sukses di Cloud! Silakan masuk.`);
+          }
           setActiveTab('login');
           setUsername(regUsername);
           setPassword(regPassword);
@@ -171,14 +195,31 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         offlineUsers[formattedUsername] = newUser;
         localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
-        setSuccess('Pendaftaran Akun Offline Sukses! Silakan masuk.');
+        if (roleSelection === 'pendata') {
+          setSuccess('Registrasi Berhasil! Akun Petugas saat ini MENUNGGU PERSETUJUAN offline dari Administrator (SLRTTANJUNGBALAI).');
+        } else {
+          setSuccess('Pendaftaran Akun Offline Sukses! Silakan masuk.');
+        }
         setActiveTab('login');
         setUsername(regUsername);
         setPassword(regPassword);
       }
-    } catch (err) {
-      console.error(err);
-      setError('Gagal memproses pendaftaran akun.');
+    } catch (err: any) {
+      console.error("Register Error details:", err);
+      let errorMsg = 'Gagal memproses pendaftaran akun.';
+      if (err && err.message) {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed && parsed.error) {
+            errorMsg = `Gagal menyimpan pendaftaran ke Cloud: ${parsed.error}`;
+          } else {
+            errorMsg = `Gagal menyimpan pendaftaran: ${err.message}`;
+          }
+        } catch (e) {
+          errorMsg = `Gagal menyimpan pendaftaran ke Cloud: ${err.message}`;
+        }
+      }
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
