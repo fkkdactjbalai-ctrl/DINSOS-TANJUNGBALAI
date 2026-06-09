@@ -114,12 +114,41 @@ export async function ensureAuthenticated() {
   return isAuthPromise;
 }
 
-// Dry-run connection validation as demanded by critical constraints
+/**
+ * Setup/initialization logic for the 'surveys' collection.
+ * Creates an initial setup/metadata document to initialize the collection structure.
+ */
+export async function setupSurveysCollection(): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return false;
+  try {
+    await ensureAuthenticated();
+    const setupDocRef = doc(db, 'surveys', '_setup_metadata');
+    await setDoc(setupDocRef, {
+      initialized: true,
+      appName: "DTSEN Tanjungbalai Survey System",
+      migratedToFirestore: true,
+      lastSetupAt: new Date().toISOString()
+    }, { merge: true });
+    console.info("Firestore 'surveys' collection setup complete.");
+    return true;
+  } catch (error) {
+    console.warn("Unable to complete 'surveys' collection setup:", error);
+    try {
+      handleFirestoreError(error, OperationType.WRITE, 'surveys/_setup_metadata');
+    } catch (e) {
+      // Return false in case of unconfigured database/permissions
+    }
+    return false;
+  }
+}
+
+// Dry-run connection validation and surveys collection setup
 async function validateFirestoreConnection() {
   if (!isFirebaseConfigured || !db) return;
   try {
     await ensureAuthenticated();
     await getDocFromServer(doc(db, 'test', 'connection')).catch(() => {});
+    await setupSurveysCollection();
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn("Please check your Firebase configuration or network connections.");
@@ -327,6 +356,7 @@ export async function sendSurveyToGoogleAppsScript(
 
 /**
  * Loads all survey entries recorded across instruments from Firestore 'surveys'.
+ * Crucial step of the migration from Google Apps Script fully to Firebase Firestore.
  */
 export async function fetchSurveysFromGoogleAppsScript(
   url: string
@@ -344,7 +374,10 @@ export async function fetchSurveysFromGoogleAppsScript(
     const querySnapshot = await getDocs(collection(db, 'surveys'));
     const surveysCol: SurveyData[] = [];
     querySnapshot.forEach((doc) => {
-      surveysCol.push(doc.data() as SurveyData);
+      // Safely filter out the '_setup_metadata' control document
+      if (doc.id !== '_setup_metadata') {
+        surveysCol.push(doc.data() as SurveyData);
+      }
     });
 
     return {
@@ -369,7 +402,8 @@ export async function fetchSurveysFromGoogleAppsScript(
 }
 
 /**
- * Registers a real-time event listener for 'surveys' to support multi-device real-time sync
+ * Registers a real-time event listener for 'surveys' to support multi-device real-time sync.
+ * Ensures metadata control documents are filtered out, maintaining clean application state.
  */
 export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): () => void {
   if (!isFirebaseConfigured || !db) {
@@ -385,7 +419,9 @@ export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): (
     unsub = onSnapshot(collection(db, 'surveys'), (snapshot) => {
       const data: SurveyData[] = [];
       snapshot.forEach(doc => {
-        data.push(doc.data() as SurveyData);
+        if (doc.id !== '_setup_metadata') {
+          data.push(doc.data() as SurveyData);
+        }
       });
       onUpdate(data);
     }, (error) => {
