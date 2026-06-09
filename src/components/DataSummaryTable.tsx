@@ -60,6 +60,8 @@ export default function DataSummaryTable({
   // URL management states with Save URL action compatibility
   const [localUrl, setLocalUrl] = useState(syncUrl);
   const [isUrlSaved, setIsUrlSaved] = useState(false);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+  const [surveyIdToDelete, setSurveyIdToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalUrl(syncUrl);
@@ -138,6 +140,14 @@ export default function DataSummaryTable({
     }
   };
 
+  const handleClearAllData = () => {
+    setShowClearConfirmModal(true);
+  };
+
+  const handleDeleteRow = (id: string) => {
+    setSurveyIdToDelete(id);
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-6 space-y-6">
       
@@ -187,11 +197,7 @@ export default function DataSummaryTable({
               <button
                 id="btn-clear-database"
                 type="button"
-                onClick={() => {
-                  if (confirm('Apakah Anda yakin ingin menghapus seluruh data?')) {
-                    onClearAll();
-                  }
-                }}
+                onClick={handleClearAllData}
                 className="bg-white hover:bg-red-50 border border-red-100 hover:border-red-200 text-red-650 text-red-600 rounded-xl text-xs font-semibold px-3 py-2.5 transition-all cursor-pointer select-none"
               >
                 Kosongkan Database
@@ -701,11 +707,7 @@ export default function DataSummaryTable({
 
                       <button
                         id={`btn-delete-${survey.id}`}
-                        onClick={() => {
-                          if (confirm(`Apakah Anda yakin ingin membuang data KK ${survey.noKK} atas nama ${survey.namaResponden}?`)) {
-                            onDelete(survey.id);
-                          }
-                        }}
+                        onClick={() => handleDeleteRow(survey.id)}
                         title="Hapus Rekaman"
                         className="p-2 text-slate-450 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                       >
@@ -805,6 +807,83 @@ export default function DataSummaryTable({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modern Dialog Confirmation Modal for Clear All */}
+      {showClearConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col p-6 space-y-4">
+            <div className="flex items-center gap-2.5 text-red-600">
+              <AlertCircle className="h-6 w-6 shrink-0" />
+              <h3 className="text-sm font-bold text-slate-800">Kosongkan Seluruh Database</h3>
+            </div>
+            
+            <p className="text-xs text-slate-600 leading-relaxed font-sans">
+              Apakah Anda yakin ingin menghapus seluruh data hasil pendataan secara permanen? Tindakan ini akan mengosongkan penyimpanan lokal dan data cloud (jika tersambung) dan tidak dapat dibatalkan.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirmModal(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-705 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-semibold cursor-pointer select-none"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClearConfirmModal(false);
+                  onClearAll();
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-red-200 cursor-pointer select-none"
+              >
+                Ya, Hapus Semua
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modern Dialog Confirmation Modal for Row Delete */}
+      {surveyIdToDelete && (
+        (() => {
+          const rec = surveys.find(s => s.id === surveyIdToDelete);
+          return (
+            <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col p-6 space-y-4">
+                <div className="flex items-center gap-2.5 text-red-600">
+                  <Trash2 className="h-6 w-6 shrink-0" />
+                  <h3 className="text-sm font-bold text-slate-800">Hapus Data Pendataan KK</h3>
+                </div>
+                
+                <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                  Apakah Anda yakin ingin membuang rekaman data KK <b>{rec ? rec.noKK : ''}</b> atas nama <b>{rec ? rec.namaResponden : ''}</b> secara permanen dari server dan penyimpanan lokal Anda?
+                </p>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSurveyIdToDelete(null)}
+                    className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-semibold cursor-pointer select-none"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDelete(surveyIdToDelete);
+                      setSurveyIdToDelete(null);
+                    }}
+                    className="px-4 py-2 bg-red-650 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-red-200 cursor-pointer select-none"
+                  >
+                    Ya, Hapus Data
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()
       )}
     </div>
   );
