@@ -487,7 +487,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
             freshErrors.push(`Pilih minimal satu Kategori PMKS untuk ${nameLabel} jika berstatus PMKS.`);
           } else {
             const hasDisability = m.pmksKategori.some(cat => 
-              cat.toLowerCase().includes('disabilitas') || cat.toLowerCase().includes('kedisabilitasan')
+              (cat || '').toLowerCase().includes('disabilitas') || (cat || '').toLowerCase().includes('kedisabilitasan')
             );
             if (hasDisability && (!m.jenisDisabilitas || !m.jenisDisabilitas.trim())) {
               freshErrors.push(`Tentukan jenis disabilitas untuk ${nameLabel} (karena memilih opsi disabilitas).`);
@@ -2183,7 +2183,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
                           </div>
 
                           {member.isPmks === 'Ya' && member.pmksKategori && member.pmksKategori.some(cat => 
-                            cat.toLowerCase().includes('disabilitas') || cat.toLowerCase().includes('kedisabilitasan')
+                            (cat || '').toLowerCase().includes('disabilitas') || (cat || '').toLowerCase().includes('kedisabilitasan')
                           ) && (
                             <div>
                               <label className="block text-[10px] font-bold text-indigo-850 mb-1.5 uppercase flex items-center gap-1">
@@ -2231,7 +2231,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
                                         
                                         // Auto-check if disabilitas is still in categories list
                                         const hasDisability = newCats.some(c => 
-                                          c.toLowerCase().includes('disabilitas') || c.toLowerCase().includes('kedisabilitasan')
+                                          (c || '').toLowerCase().includes('disabilitas') || (c || '').toLowerCase().includes('kedisabilitasan')
                                         );
                                         if (!hasDisability) {
                                           handleMemberChange(member.id, 'jenisDisabilitas', '');

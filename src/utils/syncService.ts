@@ -511,12 +511,14 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
  * Creates/registers a user document in Firestore.
  */
 export async function saveUserToFirestore(username: string, userData: any): Promise<boolean> {
+  const safeUsername = (username || '').toLowerCase();
+  if (!safeUsername) return false;
   if (!isFirebaseConfigured || !db) {
     // Save to local storage offline users too
     try {
       const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
       const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-      offlineUsers[username.toLowerCase()] = { ...offlineUsers[username.toLowerCase()], ...userData };
+      offlineUsers[safeUsername] = { ...offlineUsers[safeUsername], ...userData };
       localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
     } catch (e) {
       console.warn(e);
@@ -525,11 +527,11 @@ export async function saveUserToFirestore(username: string, userData: any): Prom
   }
   try {
     await ensureAuthenticated();
-    await setDoc(doc(db, 'users', username), userData, { merge: true });
+    await setDoc(doc(db, 'users', safeUsername), userData, { merge: true });
     return true;
   } catch (error) {
     console.error("Error saving user to Firestore: ", error);
-    handleFirestoreError(error, OperationType.WRITE, `users/${username}`);
+    handleFirestoreError(error, OperationType.WRITE, `users/${safeUsername}`);
     return false;
   }
 }
@@ -563,11 +565,13 @@ export async function fetchAllUsersFromFirestore(): Promise<any[]> {
  * Delete a user account from Firestore 'users' collection (Admin only).
  */
 export async function deleteUserFromFirestore(username: string): Promise<boolean> {
+  const safeUsername = (username || '').toLowerCase();
+  if (!safeUsername) return false;
   if (!isFirebaseConfigured || !db) {
     try {
       const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
       const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-      delete offlineUsers[username.toLowerCase()];
+      delete offlineUsers[safeUsername];
       localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
       return true;
     } catch (err) {
@@ -576,7 +580,7 @@ export async function deleteUserFromFirestore(username: string): Promise<boolean
   }
   try {
     await ensureAuthenticated();
-    await deleteDoc(doc(db, 'users', username));
+    await deleteDoc(doc(db, 'users', safeUsername));
     return true;
   } catch (error) {
     console.error("Error deleting user from Firestore:", error);

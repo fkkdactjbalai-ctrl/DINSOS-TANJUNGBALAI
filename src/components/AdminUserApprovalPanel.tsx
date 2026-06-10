@@ -56,11 +56,13 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
   const [userToDelete, setUserToDelete] = useState<{ username: string; fullname: string } | null>(null);
 
   const handleDeleteTrigger = (username: string, name: string) => {
-    if (username.toLowerCase() === currentUser.toLowerCase() || username.toLowerCase() === 'slrttanjungbalai') {
+    const safeUsername = username || '';
+    const safeCurrentUser = currentUser || '';
+    if (safeUsername.toLowerCase() === safeCurrentUser.toLowerCase() || safeUsername.toLowerCase() === 'slrttanjungbalai') {
       onShowToast('Aksi Ditolak: Anda tidak dapat menghapus akun Anda sendiri!', 'danger');
       return;
     }
-    setUserToDelete({ username, fullname: name });
+    setUserToDelete({ username: safeUsername, fullname: name });
   };
 
   const executeDelete = async () => {
