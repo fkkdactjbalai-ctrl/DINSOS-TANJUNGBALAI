@@ -573,16 +573,16 @@ export default function DataSummaryTable({
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-100">
+        <div className="overflow-x-auto rounded-xl border border-slate-100 max-h-[450px] overflow-y-auto custom-scrollbar">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
-                <th className="p-4">ID / Tanggal</th>
-                <th className="p-4">Kartu Keluarga (KK)</th>
-                <th className="p-4">Nama Responden</th>
-                <th className="p-4">Lokasi Wilayah</th>
-                <th className="p-4 text-center">Jumlah Jiwa</th>
-                <th className="p-4 text-center border-l border-slate-50">Tindakan Lapangan</th>
+                <th className="sticky top-0 bg-slate-50 p-4 z-10">ID / Tanggal</th>
+                <th className="sticky top-0 bg-slate-50 p-4 z-10">Kartu Keluarga (KK)</th>
+                <th className="sticky top-0 bg-slate-50 p-4 z-10">Nama Responden</th>
+                <th className="sticky top-0 bg-slate-50 p-4 z-10">Lokasi Wilayah</th>
+                <th className="sticky top-0 bg-slate-50 p-4 z-10 text-center">Jumlah Jiwa</th>
+                <th className="sticky top-0 bg-slate-50 p-4 z-10 text-center border-l border-slate-50">Tindakan Lapangan</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 divide-y-slate-200">
