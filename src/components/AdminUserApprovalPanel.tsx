@@ -179,13 +179,13 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
             <div className="w-full overflow-x-auto custom-scrollbar">
               <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-500 uppercase tracking-widest border-b border-slate-150">
-                    <th className="sticky top-0 bg-slate-50 py-3 px-4 z-10">Nama Lengkap &amp; Username/NIK</th>
-                    <th className="sticky top-0 bg-slate-50 py-3 px-4 z-10">Akses / Otoritas</th>
-                    <th className="sticky top-0 bg-slate-50 py-3 px-4 z-10">Sandi Akses</th>
-                    <th className="sticky top-0 bg-slate-55 bg-slate-50 py-3 px-4 z-10">Tanggal Daftar</th>
-                    <th className="sticky top-0 bg-slate-50 py-3 px-4 z-10">Status Akun</th>
-                    <th className="sticky top-0 bg-slate-50 py-3 px-4 z-10 text-center">Tindakan</th>
+                  <tr className="bg-white text-[10px] font-extrabold text-slate-500 uppercase tracking-widest border-b border-slate-150">
+                    <th className="sticky top-0 bg-white py-3 px-4 z-10">Nama Lengkap &amp; Username/NIK</th>
+                    <th className="sticky top-0 bg-white py-3 px-4 z-10">Akses / Otoritas</th>
+                    <th className="sticky top-0 bg-white py-3 px-4 z-10">Sandi Akses</th>
+                    <th className="sticky top-0 bg-white py-3 px-4 z-10">Tanggal Daftar</th>
+                    <th className="sticky top-0 bg-white py-3 px-4 z-10">Status Akun</th>
+                    <th className="sticky top-0 bg-white py-3 px-4 z-10 text-center">Tindakan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700">

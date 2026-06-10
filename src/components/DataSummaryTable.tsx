@@ -573,17 +573,17 @@ export default function DataSummaryTable({
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-slate-100 max-h-[450px] overflow-y-auto custom-scrollbar bg-white">
+        <div className="rounded-xl border border-slate-100 max-h-[400px] overflow-y-auto custom-scrollbar bg-white">
           <div className="w-full overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse text-xs">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
-                  <th className="sticky top-0 bg-slate-50 p-4 z-10">ID / Tanggal</th>
-                  <th className="sticky top-0 bg-slate-50 p-4 z-10">Kartu Keluarga (KK)</th>
-                  <th className="sticky top-0 bg-slate-50 p-4 z-10">Nama Responden</th>
-                  <th className="sticky top-0 bg-slate-50 p-4 z-10">Lokasi Wilayah</th>
-                  <th className="sticky top-0 bg-slate-50 p-4 z-10 text-center">Jumlah Jiwa</th>
-                  <th className="sticky top-0 bg-slate-55 bg-slate-50 p-4 z-10 text-center border-l border-slate-50">Tindakan Lapangan</th>
+                <tr className="bg-white text-slate-500 font-semibold border-b border-slate-100">
+                  <th className="sticky top-0 bg-white p-4 z-10">ID / Tanggal</th>
+                  <th className="sticky top-0 bg-white p-4 z-10">Kartu Keluarga (KK)</th>
+                  <th className="sticky top-0 bg-white p-4 z-10">Nama Responden</th>
+                  <th className="sticky top-0 bg-white p-4 z-10">Lokasi Wilayah</th>
+                  <th className="sticky top-0 bg-white p-4 z-10 text-center">Jumlah Jiwa</th>
+                  <th className="sticky top-0 bg-white p-4 z-10 text-center border-l border-slate-50">Tindakan Lapangan</th>
                 </tr>
               </thead>
             <tbody className="divide-y divide-slate-100 divide-y-slate-200">
