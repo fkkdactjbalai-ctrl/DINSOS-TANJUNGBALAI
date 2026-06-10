@@ -53,20 +53,27 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
     }
   };
 
-  const handleDelete = async (username: string, name: string) => {
+  const [userToDelete, setUserToDelete] = useState<{ username: string; fullname: string } | null>(null);
+
+  const handleDeleteTrigger = (username: string, name: string) => {
     if (username.toLowerCase() === currentUser.toLowerCase() || username.toLowerCase() === 'slrttanjungbalai') {
       onShowToast('Aksi Ditolak: Anda tidak dapat menghapus akun Anda sendiri!', 'danger');
       return;
     }
+    setUserToDelete({ username, fullname: name });
+  };
 
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus/menolak akun petugas "${name}" (${username})?`)) {
-      return;
-    }
-
+  const executeDelete = async () => {
+    if (!userToDelete) return;
+    const { username, fullname } = userToDelete;
+    setUserToDelete(null);
     try {
       const success = await deleteUserFromFirestore(username);
       if (success) {
-        onShowToast(`Akun "${name}" berhasil dihapus dari sistem.`, 'success');
+        onShowToast(`Akun "${fullname}" berhasil dihapus dari sistem.`, 'success');
+        // Update state in real-time
+        setUsers(prev => prev.filter(u => u.username !== username));
+        // Refresh with latest DB
         loadUsers();
       } else {
         onShowToast('Gagal menghapus akun petugas.', 'danger');
@@ -260,7 +267,7 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
                           {!isMainAdmin && (
                             <button
                               type="button"
-                              onClick={() => handleDelete(user.username, user.fullname || user.username)}
+                              onClick={() => handleDeleteTrigger(user.username, user.fullname || user.username)}
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-lg cursor-pointer"
                               title="Tolak dan Hapus Akun"
                             >
@@ -285,6 +292,39 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
           </p>
         </div>
       </div>
+
+      {/* Modern Dialog Confirmation Modal for User Delete */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col p-6 space-y-4">
+            <div className="flex items-center gap-2.5 text-rose-600">
+              <ShieldAlert className="h-6 w-6 shrink-0 animate-pulse" />
+              <h3 className="text-sm font-bold text-slate-800">Hapus Akun Petugas Data</h3>
+            </div>
+            
+            <p className="text-xs text-slate-600 leading-relaxed font-sans">
+              Apakah Anda yakin ingin menghapus akun petugas <b>{userToDelete.fullname}</b> (username/NIK: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[10px] text-slate-700">{userToDelete.username}</code>) secara permanen?
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-705 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-semibold cursor-pointer select-none"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={executeDelete}
+                className="px-4 py-2 bg-rose-605 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-200 cursor-pointer select-none"
+              >
+                Ya, Hapus Permanen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

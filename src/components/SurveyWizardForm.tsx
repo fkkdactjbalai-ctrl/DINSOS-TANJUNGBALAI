@@ -8,6 +8,41 @@ import { SurveyData, FamilyMember } from '../types';
 import * as opt from '../data/options';
 import { isFirebaseConfigured, fetchUserFromFirestore, saveUserDraftToFirestore } from '../utils/syncService';
 
+const compressCanvasTo300KB = (canvas: HTMLCanvasElement, initialQuality: number = 0.85): string => {
+  let quality = initialQuality;
+  let dataUrl = canvas.toDataURL('image/jpeg', quality);
+  // Estimate size in KB: base64 string length * 0.75 / 1024
+  let sizeKB = (dataUrl.length * 0.75) / 1024;
+  
+  // Step 1: Reduce quality
+  while (sizeKB > 300 && quality > 0.15) {
+    quality -= 0.08;
+    dataUrl = canvas.toDataURL('image/jpeg', quality);
+    sizeKB = (dataUrl.length * 0.75) / 1024;
+  }
+  
+  // Step 2: If still too large, downscale canvas dimensions iteratively
+  if (sizeKB > 300) {
+    let scale = 0.9;
+    while (sizeKB > 300 && scale > 0.3) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = Math.floor(canvas.width * scale);
+      tempCanvas.height = Math.floor(canvas.height * scale);
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+        quality = 0.75;
+        dataUrl = tempCanvas.toDataURL('image/jpeg', quality);
+        sizeKB = (dataUrl.length * 0.75) / 1024;
+      }
+      scale -= 0.1;
+    }
+  }
+  
+  console.log(`Image compressed to ${sizeKB.toFixed(1)} KB`);
+  return dataUrl;
+};
+
 interface SurveyWizardFormProps {
   initialData?: SurveyData | null;
   onSubmit: (data: SurveyData) => void;
@@ -764,7 +799,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
       ctx.fillText(new Date().toLocaleDateString('id-ID'), 515, 395);
 
       // Save as JPEG Data URL
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const dataUrl = compressCanvasTo300KB(canvas, 0.9);
       handleFieldChange(fieldName as keyof SurveyData, dataUrl);
       
       // Also save numerical Lat/Lon into the direct survey coordinates
@@ -870,7 +905,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
         ctx.fillText(`WILAYAH: ${districtName} | KELURAHAN: ${(formData.kelurahan || '-').toUpperCase()}`, 20, canvas.height - 28);
         ctx.fillText(`ID PETUGAS: DTSEN-ID01 | WAKTU: ${new Date().toLocaleString('id-ID')} WIB`, 20, canvas.height - 12);
         
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const dataUrl = compressCanvasTo300KB(canvas, 0.82);
         handleFieldChange(fieldName as keyof SurveyData, dataUrl);
       }
       handleCloseCamera();
@@ -927,7 +962,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
             ctx.fillText(`WILAYAH: SENSUS ${dst} | KEL.: ${subDst}`, 20, canvas.height - 36);
             ctx.fillText(`PETUGAS: ${formData.namaPendata || 'DTSEN-PETUGAS'} | WAKTU: ${new Date().toLocaleString('id-ID')} WIB`, 20, canvas.height - 16);
             
-            const stampedUrl = canvas.toDataURL('image/jpeg', 0.85);
+            const stampedUrl = compressCanvasTo300KB(canvas, 0.85);
             handleFieldChange(fieldName as keyof SurveyData, stampedUrl);
           } else {
             handleFieldChange(fieldName as keyof SurveyData, reader.result as string);
