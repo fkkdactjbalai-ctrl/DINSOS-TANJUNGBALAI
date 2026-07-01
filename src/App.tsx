@@ -188,16 +188,12 @@ export default function App() {
       setSurveys(prev => {
         const mergedDict: { [id: string]: SurveyData } = {};
         
-        // Seed with current local surveys:
-        // Always keep unsynced surveys.
-        // Keep synced surveys if the cloud is currently empty (to prevent wiping local data on a fresh/empty database or read failures).
+        // Always preserve all local surveys to prevent any accidental data loss!
         prev.forEach(s => {
-          if (!s.synced || cloudSurveys.length === 0) {
-            mergedDict[s.id] = s;
-          }
+          mergedDict[s.id] = s;
         });
 
-        // Merging updated cloud items
+        // Merge/update with cloud items, marking them as synced
         cloudSurveys.forEach(s => {
           mergedDict[s.id] = { ...s, synced: true };
         });
@@ -214,6 +210,38 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // Format obscure Firestore error messages into clean, user-friendly language
+  const formatErrorMessage = (message: string): string => {
+    if (!message) return '';
+    try {
+      if (message.includes('{') && message.includes('}')) {
+        const jsonStr = message.substring(message.indexOf('{'), message.lastIndexOf('}') + 1);
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.error) {
+          if (
+            parsed.error.toLowerCase().includes('quota') || 
+            parsed.error.toLowerCase().includes('resource_exhausted') || 
+            parsed.error.toLowerCase().includes('limit')
+          ) {
+            return "Kuota harian Google Firestore tercapai (Batas Spark Plan). Sistem berjalan dalam Mode Offline Lokal.";
+          }
+          return parsed.error;
+        }
+      }
+    } catch (e) {
+      // Fallback
+    }
+    
+    if (
+      message.toLowerCase().includes('quota') || 
+      message.toLowerCase().includes('resource_exhausted') || 
+      message.toLowerCase().includes('limit')
+    ) {
+      return "Kuota harian Google Firestore tercapai (Batas Spark Plan). Sistem berjalan dalam Mode Offline Lokal.";
+    }
+    return message;
+  };
 
   // Show auto-dismiss toast alerts
   const showToast = (text: string, type: 'success' | 'info' | 'danger' = 'success') => {
@@ -515,7 +543,7 @@ export default function App() {
           });
           showToast(`Sinkronisasi cloud otomatis sukses untuk No KK ${finalSurveyToSync.noKK}!`, 'success');
         } else {
-          showToast(`Tersimpan lokal. Antrean sinkronisasi cloud: ${res.message}`, 'info');
+          showToast(`Tersimpan lokal. Antrean sinkronisasi cloud: ${formatErrorMessage(res.message)}`, 'info');
         }
       }).catch(err => {
         console.warn('Direct cloud sync failed on submission:', err);
@@ -551,7 +579,7 @@ export default function App() {
       });
       showToast(`Data KK ${targetSurvey.noKK} berhasil disinkronkan ke Google Sheets!`, 'success');
     } else {
-      showToast(`Gagal menyinkronkan data KK ${targetSurvey.noKK}: ${res.message}`, 'danger');
+      showToast(`Gagal menyinkronkan data KK ${targetSurvey.noKK}: ${formatErrorMessage(res.message)}`, 'danger');
     }
     return res;
   };
@@ -633,11 +661,24 @@ export default function App() {
 
         showToast(`Sinkronisasi Dua-Arah Sukses! Berhasil mengimpor & menyelaraskan ${cloudSurveys.length} data sensus dari Google Sheets.`, 'success');
       } else {
-        showToast(`Gagal memuat data dari cloud: ${res.message}`, 'danger');
+        const isQuota = res.message?.toLowerCase().includes('quota') || res.message?.toLowerCase().includes('resource_exhausted') || res.message?.toLowerCase().includes('limit');
+        if (isQuota) {
+          setQuotaExceeded(true);
+          showToast(`Kuota harian Google Firestore tercapai (Batas Spark Plan). Sistem otomatis beralih ke Mode Offline Lokal agar Anda tetap dapat melakukan pendataan dengan aman!`, 'info');
+        } else {
+          showToast(`Gagal memuat data dari cloud: ${formatErrorMessage(res.message)}`, 'danger');
+        }
       }
     } catch (err: any) {
       console.error('Failed to pull surveys:', err);
-      showToast(`Gagal menyambung ke server cloud: ${err.message || 'Cek koneksi internet'}`, 'danger');
+      const errMsg = err?.message || '';
+      const isQuota = errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('resource_exhausted') || errMsg.toLowerCase().includes('limit');
+      if (isQuota) {
+        setQuotaExceeded(true);
+        showToast(`Kuota harian Google Firestore tercapai (Batas Spark Plan). Sistem otomatis beralih ke Mode Offline Lokal agar Anda tetap dapat melakukan pendataan dengan aman!`, 'info');
+      } else {
+        showToast(`Gagal menyambung ke server cloud: ${formatErrorMessage(errMsg || 'Cek koneksi internet')}`, 'danger');
+      }
     } finally {
       setIsPullingCloud(false);
     }
@@ -784,13 +825,23 @@ export default function App() {
         <div className="bg-amber-500 text-slate-950 px-4 py-3 sm:px-6 lg:px-8 border-b border-amber-600 shadow-sm non-printable animate-pulse-subtle">
           <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <AlertCircle className="h-5 w-5 text-slate-950 shrink-0" />
+              <AlertCircle className="h-5 w-5 text-slate-950 shrink-0 animate-bounce" />
               <div className="text-xs sm:text-sm font-semibold">
-                <span className="font-extrabold">MODE LOKAL/OFFLINE AKTIF:</span> Kuota harian database cloud Google Firestore telah terlampaui. Semua data Anda dimuat &amp; disimpan secara mandiri dan aman di penyimpanan lokal (peramban) perangkat ini. Anda dapat terus mendata dengan lancar!
+                <span className="font-extrabold">MODE LOKAL/OFFLINE AKTIF:</span> Kuota harian database cloud Google Firestore telah terlampaui. Semua data Anda dimuat &amp; disimpan secara mandiri dan aman di penyimpanan lokal peramban perangkat ini. Anda dapat terus melakukan pendataan dengan lancar!
+                <span className="block mt-1 sm:inline sm:mt-0 sm:ml-2">
+                  <a 
+                    href="https://console.firebase.google.com/project/sturdy-factor-m6m9v/firestore/databases/ai-studio-sensuskeluarga-227ee858-2718-4d4c-beee-3c7eb807c0e2/data?openUpgradeDialog=true" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="underline font-extrabold text-slate-950 hover:text-slate-800 transition-colors inline-flex items-center gap-1"
+                  >
+                    Buka Firebase Console & Upgrade Database Anda &rarr;
+                  </a>
+                </span>
               </div>
             </div>
             <div className="text-[10px] font-mono bg-slate-950/20 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider shrink-0">
-              Offline Cache Enabled
+              Offline Cache Active
             </div>
           </div>
         </div>

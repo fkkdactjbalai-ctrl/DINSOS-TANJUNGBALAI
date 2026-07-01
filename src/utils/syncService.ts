@@ -42,7 +42,7 @@ if (isFirebaseConfigured) {
 
 export { app, db, auth };
 
-let firestoreQuotaExceeded = false;
+let firestoreQuotaExceeded = localStorage.getItem('dtsen_quota_exceeded') === 'true';
 let quotaExceededCallback: ((val: boolean) => void) | null = null;
 
 export function isFirestoreQuotaExceeded(): boolean {
@@ -52,6 +52,7 @@ export function isFirestoreQuotaExceeded(): boolean {
 export function setFirestoreQuotaExceeded(val: boolean) {
   if (firestoreQuotaExceeded !== val) {
     firestoreQuotaExceeded = val;
+    localStorage.setItem('dtsen_quota_exceeded', val ? 'true' : 'false');
     if (quotaExceededCallback) {
       quotaExceededCallback(val);
     }
@@ -293,7 +294,7 @@ export async function sendSurveyToGoogleAppsScript(
   url: string, 
   survey: SurveyData
 ): Promise<{ success: boolean; message: string }> {
-  if (!isFirebaseConfigured || !db) {
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
     // If not configured, just do optional backup request if URL is real
     if (url && url.trim().startsWith('http') && !url.includes('AKfycbzRkb2H') && !url.includes('AKfycbzE3mom')) {
       try {
@@ -406,6 +407,13 @@ export async function fetchSurveysFromGoogleAppsScript(
     };
   }
 
+  if (firestoreQuotaExceeded) {
+    return {
+      success: false,
+      message: 'Quota limit exceeded. Batas kuota harian gratis untuk Google Firestore telah tercapai. Sistem berjalan sepenuhnya dalam Mode Offline Lokal.'
+    };
+  }
+
   try {
     await ensureAuthenticated();
     const querySnapshot = await getDocs(collection(db, 'surveys'));
@@ -483,7 +491,7 @@ export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): (
  * Deletes a survey from Firebase Firestore 'surveys' collection.
  */
 export async function deleteSurveyFromFirestore(id: string): Promise<boolean> {
-  if (!isFirebaseConfigured || !db) return true;
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) return true;
 
   try {
     await ensureAuthenticated();
@@ -503,7 +511,7 @@ export async function deleteSurveyFromFirestore(id: string): Promise<boolean> {
  * Deletes all surveys from Firebase Firestore 'surveys' collection.
  */
 export async function clearAllSurveysFromFirestore(): Promise<boolean> {
-  if (!isFirebaseConfigured || !db) return true;
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) return true;
 
   try {
     await ensureAuthenticated();
