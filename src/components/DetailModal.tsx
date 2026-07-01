@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { X, Printer, Phone, Calendar, User, Eye, Download, Users, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Printer, Phone, Calendar, User, Eye, Download, Users, FileText, ExternalLink } from 'lucide-react';
 import { SurveyData } from '../types';
 import { formatRupiah } from '../utils/csvExport';
 import { generatePrintableHtml } from '../utils/printGenerator';
@@ -12,8 +12,17 @@ interface DetailModalProps {
 }
 
 export default function DetailModal({ survey, onClose, autoPrint, onPrinted }: DetailModalProps) {
+  const [showIframePrintAlert, setShowIframePrintAlert] = useState(false);
+
   const handlePrintClick = () => {
     if (!survey) return;
+
+    const isIframe = window.self !== window.top;
+    if (isIframe) {
+      setShowIframePrintAlert(true);
+      return;
+    }
+
     try {
       const htmlContent = generatePrintableHtml(survey);
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
@@ -482,6 +491,69 @@ export default function DetailModal({ survey, onClose, autoPrint, onPrinted }: D
           </button>
         </div>
       </div>
+
+      {/* Print Helper Dialog (Shown when in iframe sandbox) */}
+      {showIframePrintAlert && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6 border border-slate-100 space-y-4 text-left">
+            <div className="flex items-center gap-2 text-indigo-600">
+              <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                <Printer className="h-5 w-5 animate-pulse" />
+              </span>
+              <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Cetak Membutuhkan Tab Baru</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Karena Anda sedang membuka aplikasi di dalam <strong>Panel Pratinjau Google AI Studio</strong>, sistem keamanan browser membatasi cetak langsung (iFrame Sandbox).
+            </p>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Silakan klik tombol di bawah untuk membuka aplikasi di tab baru. Formulir data keluarga <strong>No KK {survey.noKK}</strong> akan otomatis terbuka dan mencetak langsung dengan rapi! Semua data aman dan tidak akan hilang.
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <a
+                href={`${window.location.origin}${window.location.pathname}?action=print-survey&id=${survey.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowIframePrintAlert(false)}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-center font-bold text-xs shadow-xs hover:scale-[1.01] transition-all flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Buka di Tab Baru &amp; Cetak
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowIframePrintAlert(false);
+                  try {
+                    const htmlContent = generatePrintableHtml(survey);
+                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    const printWindow = window.open(blobUrl, '_blank');
+                    if (!printWindow) {
+                      const link = document.createElement('a');
+                      link.href = blobUrl;
+                      link.target = '_blank';
+                      link.click();
+                    }
+                  } catch (e) {
+                    alert("Cetak langsung dibatalkan oleh browser Anda. Silakan gunakan tombol 'Buka di Tab Baru'!");
+                  }
+                }}
+                className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-center font-semibold text-[11px]"
+              >
+                Tetap Coba Cetak Langsung
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowIframePrintAlert(false)}
+                className="w-full py-2 px-4 bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-xl text-center font-semibold text-[11px]"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

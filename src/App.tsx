@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database, LogOut, ShieldAlert, LayoutDashboard, UserCheck, FileText, Map, CloudOff, RefreshCw, Download, Upload } from 'lucide-react';
+import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database, LogOut, ShieldAlert, LayoutDashboard, UserCheck, FileText, Map, CloudOff, RefreshCw, Download, Upload, Calendar } from 'lucide-react';
 import { SurveyData } from './types';
 import Header from './components/Header';
 import SurveyWizardForm from './components/SurveyWizardForm';
 import DataSummaryTable from './components/DataSummaryTable';
 import DetailModal from './components/DetailModal';
 import GPSDistributionMap from './components/GPSDistributionMap';
+import MonthlyReportPanel from './components/MonthlyReportPanel';
 import { seedSurveys, emptySurvey } from './data/options';
 import { 
   sendSurveyToGoogleAppsScript, 
@@ -73,7 +74,7 @@ export default function App() {
 
   useEffect(() => {
     const handleScroll = () => {
-      const sections = ['database-section', 'wizard-form-section', 'spatial-map-section'];
+      const sections = ['database-section', 'wizard-form-section', 'spatial-map-section', 'monthly-report-section'];
       if (userRole === 'admin') {
         sections.push('user-approval-panel-section');
       }
@@ -426,6 +427,59 @@ export default function App() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, [userRole, selectedSurvey, editingSurvey, lastAction, surveys]);
+
+  // Support auto-login if opening via deep-link printing triggers in a new tab
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roleParam = params.get('role');
+    const unameParam = params.get('uname');
+    const fnameParam = params.get('fname');
+
+    if (roleParam && unameParam && fnameParam && !userRole) {
+      localStorage.setItem('dtsen_role', roleParam);
+      localStorage.setItem('dtsen_username', unameParam);
+      localStorage.setItem('dtsen_fullname', fnameParam);
+      localStorage.setItem('dtsen_last_nama_pendata', fnameParam);
+      
+      setUserRole(roleParam as 'admin' | 'pendata');
+      setUsername(unameParam);
+      setFullname(fnameParam);
+    }
+  }, [userRole]);
+
+  // Support auto-printing and section navigation when loading via a deep-link
+  useEffect(() => {
+    if (!userRole || surveys.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+
+    if (action === 'print-survey') {
+      const surveyId = params.get('id');
+      const found = surveys.find(s => s.id === surveyId);
+      if (found) {
+        setSelectedSurvey(found);
+        setAutoPrintActive(true);
+        // Clear query parameters from address bar to keep things clean
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } else if (action === 'print-report') {
+      // Scroll to the monthly report section
+      const element = document.getElementById('monthly-report-section');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+      
+      // Delay to let the charts & tables render and compute chosen stats
+      const timer = setTimeout(() => {
+        window.print();
+        // Clear query parameters from address bar
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [userRole, surveys]);
 
   // Automatic background synchronization for all unsynced surveys
   const syncingInProgressRef = useRef<Set<string>>(new Set());
@@ -1147,6 +1201,24 @@ export default function App() {
                   </span>
                 </button>
 
+                {/* Menu 5: Format Laporan Bulanan */}
+                <button
+                  onClick={() => scrollToSection('monthly-report-section')}
+                  className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
+                    activeSection === 'monthly-report-section'
+                      ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
+                      : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Calendar className="h-4 w-4 shrink-0 text-amber-400" />
+                    <span>Laporan Bulanan Sensus</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-800/50">
+                    Laporan
+                  </span>
+                </button>
+
                 {/* Menu 5: Urungkan Aksi Terakhir (Undo Button) */}
                 <button
                   type="button"
@@ -1319,6 +1391,15 @@ export default function App() {
               <GPSDistributionMap 
                 surveys={surveys}
                 onViewSurvey={setSelectedSurvey}
+              />
+            </section>
+
+            {/* Format Laporan Bulanan Sensus Keluarga */}
+            <section id="monthly-report-section" className="pt-4">
+              <MonthlyReportPanel 
+                surveys={surveys}
+                onViewSurvey={setSelectedSurvey}
+                userRole={userRole}
               />
             </section>
 
