@@ -11,7 +11,9 @@ import {
   deleteDoc, 
   onSnapshot, 
   getDocFromServer,
-  updateDoc
+  updateDoc,
+  query,
+  where
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -395,10 +397,12 @@ export async function sendSurveyToGoogleAppsScript(
 /**
  * Loads all survey entries recorded across instruments from Firestore 'surveys'.
  * Crucial step of the migration from Google Apps Script fully to Firebase Firestore.
+ * Supports delta sync (incremental pull) using sinceTimestamp parameter.
  */
 export async function fetchSurveysFromGoogleAppsScript(
-  url: string
-): Promise<{ success: boolean; surveys?: SurveyData[]; message: string }> {
+  url: string,
+  sinceTimestamp?: string
+): Promise<{ success: boolean; surveys?: SurveyData[]; isDelta?: boolean; message: string }> {
   if (!isFirebaseConfigured || !db) {
     return {
       success: true,
@@ -416,7 +420,23 @@ export async function fetchSurveysFromGoogleAppsScript(
 
   try {
     await ensureAuthenticated();
-    const querySnapshot = await getDocs(collection(db, 'surveys'));
+    
+    let surveysQuery;
+    let isDelta = false;
+
+    if (sinceTimestamp) {
+      // Delta sync: fetch only documents synced or modified after the sinceTimestamp
+      surveysQuery = query(
+        collection(db, 'surveys'),
+        where('syncedAt', '>', sinceTimestamp)
+      );
+      isDelta = true;
+    } else {
+      // Full sync: fetch everything
+      surveysQuery = collection(db, 'surveys');
+    }
+
+    const querySnapshot = await getDocs(surveysQuery);
     const surveysCol: SurveyData[] = [];
     querySnapshot.forEach((doc) => {
       // Safely filter out the '_setup_metadata' control document
@@ -425,10 +445,15 @@ export async function fetchSurveysFromGoogleAppsScript(
       }
     });
 
+    const msg = isDelta
+      ? `Berhasil memperbarui ${surveysCol.length} perubahan data sensus baru/terkini (Delta Sync) dari Firestore Cloud!`
+      : `Berhasil menarik ${surveysCol.length} data sensus lengkap (Full Sync) dari Firestore Cloud!`;
+
     return {
       success: true,
       surveys: surveysCol,
-      message: `Berhasil menarik ${surveysCol.length} data sensus langsung dari Firestore Cloud!`
+      isDelta,
+      message: msg
     };
   } catch (error) {
     try {
@@ -465,7 +490,11 @@ export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): (
       const data: SurveyData[] = [];
       snapshot.forEach(doc => {
         if (doc.id !== '_setup_metadata') {
-          data.push(doc.data() as SurveyData);
+          const docData = doc.data() as any;
+          // Filter out soft-deleted documents
+          if (!docData.deleted) {
+            data.push(docData as SurveyData);
+          }
         }
       });
       onUpdate(data);
@@ -489,13 +518,19 @@ export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): (
 
 /**
  * Deletes a survey from Firebase Firestore 'surveys' collection.
+ * Uses soft delete to allow delta/partial updates synchronization across clients.
  */
 export async function deleteSurveyFromFirestore(id: string): Promise<boolean> {
   if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) return true;
 
   try {
     await ensureAuthenticated();
-    await deleteDoc(doc(db, 'surveys', id));
+    // Soft delete to propagate deletion to other clients during delta sync
+    await setDoc(doc(db, 'surveys', id), {
+      id,
+      deleted: true,
+      syncedAt: new Date().toISOString()
+    }, { merge: true });
     return true;
   } catch (error) {
     try {
@@ -509,6 +544,7 @@ export async function deleteSurveyFromFirestore(id: string): Promise<boolean> {
 
 /**
  * Deletes all surveys from Firebase Firestore 'surveys' collection.
+ * Uses soft delete to allow delta/partial updates synchronization across clients.
  */
 export async function clearAllSurveysFromFirestore(): Promise<boolean> {
   if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) return true;
@@ -519,7 +555,12 @@ export async function clearAllSurveysFromFirestore(): Promise<boolean> {
     const batchPromises: Promise<any>[] = [];
     querySnapshot.forEach((docSnap) => {
       if (docSnap.id !== '_setup_metadata') {
-        batchPromises.push(deleteDoc(docSnap.ref));
+        batchPromises.push(
+          setDoc(docSnap.ref, {
+            deleted: true,
+            syncedAt: new Date().toISOString()
+          }, { merge: true })
+        );
       }
     });
     await Promise.all(batchPromises);

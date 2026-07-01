@@ -28,7 +28,7 @@ interface DataSummaryTableProps {
   setIsAutoSync: (enabled: boolean) => void;
   onSyncSurvey: (id: string) => Promise<{ success: boolean; message: string }>;
   onSyncAll: (unsyncedOnly: boolean) => Promise<{ success: boolean; count: number }>;
-  onPullCloudData?: () => Promise<void>;
+  onPullCloudData?: (forceFull?: boolean) => Promise<void>;
   isPullingCloud?: boolean;
 
   // Optional lifted quick filter
@@ -77,6 +77,16 @@ export default function DataSummaryTable({
   const [localQuickFilter, setLocalQuickFilter] = useState<'all' | 'today' | 'unsynced' | 'pmks' | 'priority'>('all');
   const quickFilter = quickFilterProp !== undefined ? quickFilterProp : localQuickFilter;
   const setQuickFilter = setQuickFilterProp !== undefined ? setQuickFilterProp : setLocalQuickFilter;
+
+  // Delta Sync choice state
+  const [pullMode, setPullMode] = useState<'delta' | 'full'>(() => {
+    return localStorage.getItem('dtsen_pull_mode') === 'full' ? 'full' : 'delta';
+  });
+
+  const changePullMode = (mode: 'delta' | 'full') => {
+    setPullMode(mode);
+    localStorage.setItem('dtsen_pull_mode', mode);
+  };
 
   // Cloud Sync state variables
   const [isSyncPanelOpen, setIsSyncPanelOpen] = useState(false);
@@ -371,20 +381,30 @@ export default function DataSummaryTable({
             </button>
 
             {userRole === 'admin' && onPullCloudData && (
-              <button
-                id="btn-pull-cloud-data"
-                type="button"
-                disabled={isPullingCloud}
-                onClick={onPullCloudData}
-                className={`w-full py-2 px-3 rounded-lg text-xs font-bold border border-emerald-600 bg-white text-emerald-800 hover:bg-emerald-50 hover:border-emerald-700 transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer select-none`}
-              >
-                {isPullingCloud ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600" />
-                ) : (
-                  <Download className="h-3.5 w-3.5 text-emerald-600" />
+              <div className="space-y-1 w-full">
+                <button
+                  id="btn-pull-cloud-data"
+                  type="button"
+                  disabled={isPullingCloud}
+                  onClick={() => onPullCloudData(pullMode === 'full')}
+                  className={`w-full py-2 px-3 rounded-lg text-xs font-bold border border-emerald-600 bg-white text-emerald-800 hover:bg-emerald-50 hover:border-emerald-700 transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer select-none`}
+                >
+                  {isPullingCloud ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5 text-emerald-600" />
+                  )}
+                  {isPullingCloud 
+                    ? (pullMode === 'delta' ? 'Delta Sync...' : 'Full Sync...') 
+                    : (pullMode === 'delta' ? 'Tarik Delta Data' : 'Tarik Sensus Penuh')
+                  }
+                </button>
+                {localStorage.getItem('dtsen_last_sync_timestamp') && (
+                  <span className="text-[9px] text-slate-400 block text-center font-mono">
+                    Last: {new Date(localStorage.getItem('dtsen_last_sync_timestamp')!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ({pullMode === 'delta' ? 'Delta' : 'Penuh'})
+                  </span>
                 )}
-                {isPullingCloud ? 'Menarik Data...' : 'Tarik Data dari Awan'}
-              </button>
+              </div>
             )}
           </div>
         </div>
@@ -467,6 +487,51 @@ export default function DataSummaryTable({
                   Sinkronisasi Otomatis saat memasukkan Data Lapangan Baru (Direkomendasikan)
                 </span>
               </label>
+            </div>
+
+            {/* Delta vs Full Sync Mode Section */}
+            <div className="border-t pt-3 border-slate-100 space-y-2.5">
+              <span className="text-xs font-bold text-slate-700 block">Metode Sinkronisasi Unduh Data (Pull Cloud Database):</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div 
+                  onClick={() => changePullMode('delta')} 
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    pullMode === 'delta' 
+                      ? 'bg-emerald-50/50 border-emerald-300 text-slate-800 ring-2 ring-emerald-500/10' 
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="p-1 bg-emerald-100 text-emerald-700 rounded-lg">
+                      <CloudLightning className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs font-bold text-slate-800">Delta Sinkronisasi (Rekomendasi)</span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 mt-1.5 leading-relaxed">
+                    Hanya mendownload data sensus yang dibuat atau dimodifikasi sejak sinkronisasi terakhir. 
+                    <span className="font-semibold text-emerald-600"> Sangat hemat kuota baca (read ops) Firestore Anda</span> (Spark Plan harian).
+                  </p>
+                </div>
+
+                <div 
+                  onClick={() => changePullMode('full')} 
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    pullMode === 'full'
+                      ? 'bg-amber-50/50 border-amber-300 text-slate-800 ring-2 ring-amber-500/10' 
+                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="p-1 bg-amber-100 text-amber-700 rounded-lg">
+                      <Database className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs font-bold text-slate-800">Sinkronisasi Penuh (Full Sync)</span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 mt-1.5 leading-relaxed">
+                    Mendownload seluruh data dari nol. Berguna jika Anda baru saja menghapus cache database lokal peramban atau data tidak sinkron.
+                  </p>
+                </div>
+              </div>
             </div>
             
             <div className="text-[11px] text-slate-400 bg-slate-50 border border-slate-100/50 p-3 rounded-lg flex gap-2">

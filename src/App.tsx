@@ -616,21 +616,37 @@ export default function App() {
   };
 
   // Pull all records from cloud database and merge locally
-  const handlePullCloudData = async () => {
+  const handlePullCloudData = async (forceFull: boolean = false) => {
     if (!syncUrl) {
       showToast('Gagal menarik data: URL Google Apps Script belum dikonfigurasi.', 'danger');
       return;
     }
     
     setIsPullingCloud(true);
-    showToast('Menghubungi Google Sheets untuk menarik data terbaru...', 'info');
+    
+    const lastSync = forceFull ? undefined : (localStorage.getItem('dtsen_last_sync_timestamp') || undefined);
+    
+    if (lastSync) {
+      showToast(`Menghubungi cloud untuk memuat perubahan data baru sejak ${new Date(lastSync).toLocaleTimeString('id-ID')} (Delta Sync)...`, 'info');
+    } else {
+      showToast('Menghubungi cloud untuk memuat seluruh database lengkap (Full Sync)...', 'info');
+    }
+    
+    const syncStartTime = new Date().toISOString();
     
     try {
-      const res = await fetchSurveysFromGoogleAppsScript(syncUrl);
+      const res = await fetchSurveysFromGoogleAppsScript(syncUrl, lastSync);
       if (res.success && res.surveys) {
         const cloudSurveys = res.surveys;
+        
         if (cloudSurveys.length === 0) {
-          showToast('Tidak ada data sensus yang tersedia di Google Sheets.', 'info');
+          if (lastSync) {
+            showToast('Tidak ada perubahan data sensus baru di cloud (Sudah Sinkron).', 'success');
+          } else {
+            showToast('Tidak ada data sensus yang tersedia di cloud database.', 'info');
+          }
+          // Still update last sync timestamp to avoid missing any edge updates
+          localStorage.setItem('dtsen_last_sync_timestamp', syncStartTime);
           setIsPullingCloud(false);
           return;
         }
@@ -644,10 +660,14 @@ export default function App() {
             mergedDict[s.id] = s;
           });
 
-          // Overwrite/insert with data fetched from Google Sheets
+          // Overwrite/insert or delete based on data fetched from Cloud
           cloudSurveys.forEach(s => {
-            // Force status to be synced in local state since it came from sheets!
-            mergedDict[s.id] = { ...s, synced: true };
+            if ((s as any).deleted) {
+              delete mergedDict[s.id];
+            } else {
+              // Force status to be synced in local state since it came from cloud!
+              mergedDict[s.id] = { ...s, synced: true };
+            }
           });
 
           // Convert back to sorted list (newest first, based on submittedAt)
@@ -659,7 +679,13 @@ export default function App() {
           return mergedList;
         });
 
-        showToast(`Sinkronisasi Dua-Arah Sukses! Berhasil mengimpor & menyelaraskan ${cloudSurveys.length} data sensus dari Google Sheets.`, 'success');
+        // Store last sync time on success
+        localStorage.setItem('dtsen_last_sync_timestamp', syncStartTime);
+
+        const successMsg = lastSync
+          ? `Delta Sinkronisasi Sukses! Berhasil menyelaraskan ${cloudSurveys.length} perubahan data sensus baru.`
+          : `Sinkronisasi Penuh Sukses! Berhasil menyelaraskan total ${cloudSurveys.length} data sensus dari cloud.`;
+        showToast(successMsg, 'success');
       } else {
         const isQuota = res.message?.toLowerCase().includes('quota') || res.message?.toLowerCase().includes('resource_exhausted') || res.message?.toLowerCase().includes('limit');
         if (isQuota) {
