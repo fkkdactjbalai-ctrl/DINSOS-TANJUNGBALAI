@@ -19,6 +19,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { SurveyData, FamilyMember } from '../types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface MonthlyReportPanelProps {
   surveys: SurveyData[];
@@ -447,6 +448,77 @@ export default function MonthlyReportPanel({ surveys, onViewSurvey, userRole }: 
               </div>
             </div>
 
+          </div>
+
+          {/* Section B-1: Visualisasi Grafik Batang Sebaran KK (non-printable) */}
+          <div className="bg-slate-50/40 rounded-2xl border border-slate-150 p-5 space-y-4 non-printable">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <TrendingUp className="h-4.5 w-4.5" />
+                </span>
+                <div>
+                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">Perbandingan Jumlah KK per Kelurahan</h3>
+                  <p className="text-[10px] text-slate-400">Distribusi visual keluarga (KK) terdata di setiap Kelurahan pada {currentMonthLabel} {selectedYear}</p>
+                </div>
+              </div>
+              <div className="text-right text-xs font-bold text-slate-500">
+                Total Kelurahan Terdata: <span className="font-black text-indigo-700">{kelurahanBreakdown.length}</span>
+              </div>
+            </div>
+
+            <div className="h-72 w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={kelurahanBreakdown}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis 
+                    dataKey="name" 
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: '#475569', fontSize: 10, fontWeight: 700 }}
+                  />
+                  <YAxis 
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: '#475569', fontSize: 10 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#ffffff', 
+                      border: '1px solid #cbd5e1', 
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.08)',
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: '11px'
+                    }}
+                    cursor={{ fill: 'rgba(241, 245, 249, 0.5)' }}
+                  />
+                  <Bar 
+                    dataKey="kkCount" 
+                    name="Jumlah KK" 
+                    radius={[6, 6, 0, 0]} 
+                    maxBarSize={45}
+                  >
+                    {kelurahanBreakdown.map((entry, index) => {
+                      const colors = [
+                        '#4f46e5', // Indigo
+                        '#06b6d4', // Cyan
+                        '#10b981', // Emerald
+                        '#f59e0b', // Amber
+                        '#8b5cf6', // Violet
+                        '#ec4899', // Pink
+                        '#ef4444', // Red
+                      ];
+                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Section B: Grid and Detailed Tables */}

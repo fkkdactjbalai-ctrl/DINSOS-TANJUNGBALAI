@@ -2,7 +2,9 @@ import { SurveyData, FamilyMember } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { 
-  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager,
   collection, 
   doc, 
   setDoc, 
@@ -32,7 +34,11 @@ let auth: any = null;
 if (isFirebaseConfigured) {
   try {
     app = initializeApp(firebaseConfig);
-    db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    }, firebaseConfig.firestoreDatabaseId);
     auth = getAuth();
   } catch (error) {
     console.warn("Failed to initialize Firebase services. Falling back to offline client mode.", error);
@@ -748,3 +754,51 @@ export function getGoogleAppsScriptTemplate(): string {
  * ...
  */`;
 }
+
+/**
+ * Fetches all surveys directly from Firestore for cleanup and analysis.
+ */
+export async function fetchCloudSurveysForAnalysis(): Promise<SurveyData[]> {
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    return [];
+  }
+  try {
+    await ensureAuthenticated();
+    const querySnapshot = await getDocs(collection(db, 'surveys'));
+    const list: SurveyData[] = [];
+    querySnapshot.forEach((docSnap) => {
+      if (docSnap.id !== '_setup_metadata') {
+        list.push(docSnap.data() as SurveyData);
+      }
+    });
+    return list;
+  } catch (error) {
+    console.warn("Unable to fetch cloud surveys for analysis:", error);
+    checkIfQuotaError(error);
+    return [];
+  }
+}
+
+/**
+ * Hard-deletes a list of surveys from Firestore to free up database space and quota.
+ */
+export async function hardDeleteSurveysFromFirestore(ids: string[]): Promise<{ success: boolean; count: number; error?: string }> {
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    return { success: false, count: 0, error: "Firebase tidak terkonfigurasi atau kuota terlampaui." };
+  }
+  try {
+    await ensureAuthenticated();
+    let deletedCount = 0;
+    const promises = ids.map(async (id) => {
+      await deleteDoc(doc(db, 'surveys', id));
+      deletedCount++;
+    });
+    await Promise.all(promises);
+    return { success: true, count: deletedCount };
+  } catch (error) {
+    console.error("Error hard deleting surveys from Firestore:", error);
+    checkIfQuotaError(error);
+    return { success: false, count: 0, error: (error as Error).message };
+  }
+}
+

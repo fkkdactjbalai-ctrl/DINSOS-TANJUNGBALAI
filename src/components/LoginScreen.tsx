@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, UserCheck, KeyRound, AlertCircle, Eye, EyeOff, Lock, HeartHandshake, UserPlus, LogIn, ChevronRight } from 'lucide-react';
-import { isFirebaseConfigured, fetchUserFromFirestore, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, isFirebaseConfigured, fetchUserFromFirestore, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
 
 interface LoginScreenProps {
   onLoginSuccess: (role: 'admin' | 'pendata', username: string, fullname: string) => void;
@@ -74,10 +75,27 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           console.warn("Offline local seeding warning:", e);
         }
 
-        // Always attempt online seeding to Cloud Firestore database if available
-        if (isFirebaseConfigured) {
-          await saveUserToFirestore('slrttanjungbalai', seedAdmin);
-          await saveUserToFirestore('fasilitator slrt', seedFasilitator);
+        // Always attempt online seeding to Cloud Firestore database if available and not already present
+        if (isFirebaseConfigured && db) {
+          try {
+            const adminDocRef = doc(db, 'users', 'slrttanjungbalai');
+            const adminSnap = await getDoc(adminDocRef);
+            if (!adminSnap.exists()) {
+              await saveUserToFirestore('slrttanjungbalai', seedAdmin);
+            }
+          } catch (adminErr) {
+            console.warn("Check/seed admin document warning:", adminErr);
+          }
+
+          try {
+            const fasilitatorDocRef = doc(db, 'users', 'fasilitator slrt');
+            const fasilitatorSnap = await getDoc(fasilitatorDocRef);
+            if (!fasilitatorSnap.exists()) {
+              await saveUserToFirestore('fasilitator slrt', seedFasilitator);
+            }
+          } catch (fasilErr) {
+            console.warn("Check/seed fasilitator document warning:", fasilErr);
+          }
         }
       } catch (err) {
         console.warn("Background seeding warning:", err);
@@ -149,7 +167,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
             onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
           } else {
-            setError('Akun tidak ditemukan di cloud database. Silakan ganti tab ke "Daftar Akun" di atas terlebih dahulu.');
+            if (isFirestoreQuotaExceeded()) {
+              setError('Mode Offline (Kuota Firebase Terlampaui): Akun Anda belum terdaftar di HP/PC ini. Silakan masuk menggunakan Akun Petugas Default -> Username: "fasilitator slrt" | Sandi: "FS2026".');
+            } else {
+              setError('Akun tidak ditemukan di cloud database. Silakan ganti tab ke "Daftar Akun" di atas terlebih dahulu.');
+            }
           }
         }
       } else {
@@ -189,7 +211,32 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       }
     } catch (err: any) {
       console.error(err);
-      setError('Koneksi terganggu. Menggunakan bypass offline...');
+      
+      // Fallback check: see if we can find them in local cached storage first!
+      try {
+        const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+        const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+        const localUser = offlineUsers[username.trim().toLowerCase()];
+        
+        if (localUser && localUser.password === password) {
+          if (localUser.role !== roleSelection) {
+            setError(`Akun lokal terdaftar sebagai ${localUser.role === 'admin' ? 'Admin' : 'Pendata'}!`);
+            setIsLoading(false);
+            return;
+          }
+          if (localUser.role === 'pendata' && localUser.isApproved === false) {
+            setError('Akses Ditangguhkan: Akun lokal Anda belum disetujui oleh Administrator.');
+            setIsLoading(false);
+            return;
+          }
+          onLoginSuccess(localUser.role, localUser.username, localUser.fullname);
+          return;
+        }
+      } catch (cacheErr) {
+        console.warn("Unable to perform offline local cache fallback:", cacheErr);
+      }
+
+      setError('Koneksi terganggu atau kuota habis. Menggunakan bypass offline...');
       // Bypass offline for fast demo / recovery
       if (roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102') {
         onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
@@ -198,7 +245,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
         onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
       } else {
-        setError('Keamanan Sensus: Gagal menghubungi database. Hubungi Administrator (SLRTTANJUNGBALAI - SLRTKITO9102)');
+        setError('Keamanan Sensus: Gagal menghubungi database cloud. Gunakan Akun Lapangan Default -> Username: "fasilitator slrt" | Sandi: "FS2026"');
       }
     } finally {
       setIsLoading(false);

@@ -22,6 +22,7 @@ import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
 import QuickStats from './components/QuickStats';
 import AdminUserApprovalPanel from './components/AdminUserApprovalPanel';
+import CloudCleanupPanel from './components/CloudCleanupPanel';
 import MetricsGrid from './components/MetricsGrid';
 
 interface UndoAction {
@@ -1321,8 +1322,9 @@ export default function App() {
 
             {/* Admin User Approval Management Panel */}
             {userRole === 'admin' && (
-              <section id="user-approval-panel-section" className="space-y-4">
+              <section id="user-approval-panel-section" className="space-y-6">
                 <AdminUserApprovalPanel onShowToast={showToast} currentUser={username} />
+                <CloudCleanupPanel onShowToast={showToast} />
               </section>
             )}
 

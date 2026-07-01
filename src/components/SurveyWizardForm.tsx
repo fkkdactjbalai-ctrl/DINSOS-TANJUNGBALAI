@@ -170,19 +170,37 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     restoreDraft();
   }, [username, initialData, draftLoaded]);
 
-  // Debounced Auto-save to cloud & local on formData or section change
+  // 1. Fast debounce for Local Storage backup (very safe and fast)
   useEffect(() => {
-    if (!username || initialData) return;
-    
-    // Do not save immediately if we haven't loaded draft yet (to avoid overwriting with defaults)
-    if (!draftLoaded) {
-      return;
-    }
+    if (!username || initialData || !draftLoaded) return;
 
     const timer = setTimeout(() => {
-      // Safe Auto-Save draft
+      localStorage.setItem(
+        `dtsen_draft_${username}`,
+        JSON.stringify({ currentStep: currentSection, draftData: formData })
+      );
+    }, 1500); // 1.5 seconds debounce for local save
+
+    return () => clearTimeout(timer);
+  }, [formData, currentSection, username, draftLoaded, initialData]);
+
+  // 2. Slow/Optimized debounce for Firestore Sync (massive quota saver!)
+  // Syncs immediately on section change, but waits 25 seconds when typing inside the section
+  const prevSectionRef = useRef<number>(currentSection);
+
+  useEffect(() => {
+    if (!username || initialData || !draftLoaded) return;
+
+    // Determine if section changed
+    const sectionChanged = prevSectionRef.current !== currentSection;
+    prevSectionRef.current = currentSection;
+
+    // Use a 25-second debounce for typing, or 0ms if they just clicked Next/Back (section changed)
+    const delay = sectionChanged ? 0 : 25000;
+
+    const timer = setTimeout(() => {
       saveUserDraftToFirestore(username, currentSection, formData);
-    }, 1500); // 1.5 seconds debounce
+    }, delay);
 
     return () => clearTimeout(timer);
   }, [formData, currentSection, username, draftLoaded, initialData]);
