@@ -3,7 +3,8 @@ import {
   Search, FileSpreadsheet, Eye, Edit2, Trash2, Database, MapPin, Calendar, 
   HelpCircle, Sparkles, SlidersHorizontal, AlertCircle, FileText,
   Cloud, CloudOff, RefreshCw, Settings, Code, Copy, ChevronDown, ChevronUp, 
-  Check, ExternalLink, Info, CheckCircle2, CloudLightning, Download, Printer
+  Check, ExternalLink, Info, CheckCircle2, CloudLightning, Download, Printer,
+  X, BookmarkCheck
 } from 'lucide-react';
 import { SurveyData } from '../types';
 import { exportSurveysToCSV } from '../utils/csvExport';
@@ -29,6 +30,14 @@ interface DataSummaryTableProps {
   onSyncAll: (unsyncedOnly: boolean) => Promise<{ success: boolean; count: number }>;
   onPullCloudData?: () => Promise<void>;
   isPullingCloud?: boolean;
+
+  // Optional lifted quick filter
+  quickFilter?: 'all' | 'today' | 'unsynced' | 'pmks' | 'priority';
+  setQuickFilter?: (val: 'all' | 'today' | 'unsynced' | 'pmks' | 'priority') => void;
+
+  // Optional lifted search status
+  hasSearched?: boolean;
+  setHasSearched?: (val: boolean) => void;
 }
 
 const getStatusPendataanBadgeColorByValue = (val?: string) => {
@@ -42,13 +51,32 @@ const getStatusPendataanBadgeColorByValue = (val?: string) => {
 export default function DataSummaryTable({ 
   surveys, onView, onEdit, onDelete, onPrint, onLoadSeeds, onClearAll, userRole,
   syncUrl, setSyncUrl, isAutoSync, setIsAutoSync, onSyncSurvey, onSyncAll,
-  onPullCloudData, isPullingCloud = false
+  onPullCloudData, isPullingCloud = false,
+  quickFilter: quickFilterProp,
+  setQuickFilter: setQuickFilterProp,
+  hasSearched: hasSearchedProp,
+  setHasSearched: setHasSearchedProp
 }: DataSummaryTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterKecamatan, setFilterKecamatan] = useState('Semua');
   const [filterKelurahan, setFilterKelurahan] = useState('Semua');
   const [filterSyncStatus, setFilterSyncStatus] = useState('Semua');
   const [filterStatusPendataan, setFilterStatusPendataan] = useState('Semua');
+  
+  // Committed states for SIKS-NG search flow (only applied when clicking 'Cari Data')
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  const [activeKecamatan, setActiveKecamatan] = useState('Semua');
+  const [activeKelurahan, setActiveKelurahan] = useState('Semua');
+  const [activeSyncStatus, setActiveSyncStatus] = useState('Semua');
+  const [activeStatusPendataan, setActiveStatusPendataan] = useState('Semua');
+
+  const [localHasSearched, setLocalHasSearched] = useState(false);
+  const hasSearched = hasSearchedProp !== undefined ? hasSearchedProp : localHasSearched;
+  const setHasSearched = setHasSearchedProp !== undefined ? setHasSearchedProp : setLocalHasSearched;
+  
+  const [localQuickFilter, setLocalQuickFilter] = useState<'all' | 'today' | 'unsynced' | 'pmks' | 'priority'>('all');
+  const quickFilter = quickFilterProp !== undefined ? quickFilterProp : localQuickFilter;
+  const setQuickFilter = setQuickFilterProp !== undefined ? setQuickFilterProp : setLocalQuickFilter;
 
   // Cloud Sync state variables
   const [isSyncPanelOpen, setIsSyncPanelOpen] = useState(false);
@@ -75,31 +103,80 @@ export default function DataSummaryTable({
     }, 2500);
   };
 
+  const handleSearchSubmit = () => {
+    setActiveSearchTerm(searchTerm);
+    setActiveKecamatan(filterKecamatan);
+    setActiveKelurahan(filterKelurahan);
+    setActiveSyncStatus(filterSyncStatus);
+    setActiveStatusPendataan(filterStatusPendataan);
+    setHasSearched(true);
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setFilterKecamatan('Semua');
+    setFilterKelurahan('Semua');
+    setFilterSyncStatus('Semua');
+    setFilterStatusPendataan('Semua');
+    
+    setActiveSearchTerm('');
+    setActiveKecamatan('Semua');
+    setActiveKelurahan('Semua');
+    setActiveSyncStatus('Semua');
+    setActiveStatusPendataan('Semua');
+    
+    setHasSearched(false);
+    if (setQuickFilter) setQuickFilter('all');
+  };
+
   // Stats for the synchronization panel
   const totalLocal = surveys.length;
   const totalSynced = surveys.filter(s => s.synced).length;
   const totalUnsynced = totalLocal - totalSynced;
 
+  // Stats for the quick monitoring toolbar
+  const todayStr = new Date().toDateString();
+  const countAll = surveys.length;
+  const countToday = surveys.filter(s => s.submittedAt && new Date(s.submittedAt).toDateString() === todayStr).length;
+  const countUnsynced = surveys.filter(s => !s.synced).length;
+  const countPmks = surveys.filter(s => (s.anggotaKeluarga || []).some(m => m.isPmks === 'Ya')).length;
+  const countPriority = surveys.filter(s => s.statusPendataan === 'Usulan Baru').length;
+
   // Filter logic
   const filteredSurveys = surveys.filter(s => {
-    const matchesSearch = 
-      s.noKK.includes(searchTerm) || 
-      (s.namaResponden || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.namaPendata || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.anggotaKeluarga || []).some(m => (m.nama || '').toLowerCase().includes(searchTerm.toLowerCase()));
+    const term = (activeSearchTerm || '').toLowerCase().trim();
+    const matchesSearch = !term ||
+      (s.noKK || '').toLowerCase().includes(term) || 
+      (s.namaResponden || '').toLowerCase().includes(term) ||
+      (s.namaPendata || '').toLowerCase().includes(term) ||
+      (s.anggotaKeluarga || []).some(m => 
+        (m.nama || '').toLowerCase().includes(term) || 
+        (m.nik || '').toLowerCase().includes(term)
+      );
     
-    const matchesKecamatan = filterKecamatan === 'Semua' || s.kecamatan === filterKecamatan;
+    const matchesKecamatan = activeKecamatan === 'Semua' || s.kecamatan === activeKecamatan;
     
-    const matchesKelurahan = filterKelurahan === 'Semua' || s.kelurahan === filterKelurahan;
+    const matchesKelurahan = activeKelurahan === 'Semua' || s.kelurahan === activeKelurahan;
     
     let matchesSync = true;
-    if (filterSyncStatus === 'synced') matchesSync = !!s.synced;
-    if (filterSyncStatus === 'unsynced') matchesSync = !s.synced;
+    if (activeSyncStatus === 'synced') matchesSync = !!s.synced;
+    if (activeSyncStatus === 'unsynced') matchesSync = !s.synced;
 
-    const matchesStatusPendataan = filterStatusPendataan === 'Semua' || 
-      (s.statusPendataan || 'Usulan Baru') === filterStatusPendataan;
+    const matchesStatusPendataan = activeStatusPendataan === 'Semua' || 
+      (s.statusPendataan || 'Usulan Baru') === activeStatusPendataan;
 
-    return matchesSearch && matchesKecamatan && matchesKelurahan && matchesSync && matchesStatusPendataan;
+    let matchesQuickFilter = true;
+    if (quickFilter === 'today') {
+      matchesQuickFilter = s.submittedAt ? new Date(s.submittedAt).toDateString() === todayStr : false;
+    } else if (quickFilter === 'unsynced') {
+      matchesQuickFilter = !s.synced;
+    } else if (quickFilter === 'pmks') {
+      matchesQuickFilter = (s.anggotaKeluarga || []).some(m => m.isPmks === 'Ya');
+    } else if (quickFilter === 'priority') {
+      matchesQuickFilter = s.statusPendataan === 'Usulan Baru';
+    }
+
+    return matchesSearch && matchesKecamatan && matchesKelurahan && matchesSync && matchesStatusPendataan && matchesQuickFilter;
   });
 
   // Extract unique subdistricts (kecamatan) for filter list
@@ -205,7 +282,7 @@ export default function DataSummaryTable({
             </>
           )}
 
-          {surveys.length === 0 && userRole === 'admin' && (
+          {surveys.length === 0 && (
             <button
               id="btn-seed-data"
               type="button"
@@ -408,35 +485,244 @@ export default function DataSummaryTable({
       </div>
 
       {/* Grid of Search, Filters, Stats */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-        {/* Search Input bar */}
-        <div className="relative flex-1 max-w-md">
-          <span className="absolute left-3 top-2.5 text-slate-400">
-            <Search className="h-4 w-4" />
-          </span>
-          <input
-            id="table-search"
-            type="text"
-            placeholder="Cari KK, nama responden, atau pendata..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full text-xs p-2.5 pl-10 rounded-xl border border-slate-200 bg-white outline-hidden transition-colors focus:border-slate-400"
-          />
+      <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-5">
+        
+        {/* Real-time Inputted Data Monitoring Toolbar */}
+        <div className="space-y-3 bg-slate-50/50 p-4 rounded-xl border border-slate-200/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/50">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-1.5">
+                ⚡ BAR TOOLBAR KHUSUS: PANTAU DATA MASUK (REAL-TIME)
+              </span>
+            </div>
+            <div className="text-[9px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-3xs">
+              Lokal + Cloud: {countAll} Entri Terinput
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {/* All Data Pill */}
+            <button
+              id="toolbar-filter-all"
+              type="button"
+              onClick={() => {
+                setQuickFilter('all');
+                setHasSearched(true);
+              }}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                quickFilter === 'all'
+                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Database className={`h-3.5 w-3.5 shrink-0 ${quickFilter === 'all' ? 'text-white' : 'text-indigo-600'}`} />
+                <span className="text-[11px] font-bold truncate">Semua Data</span>
+              </div>
+              <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md shrink-0 ml-1 font-bold ${
+                quickFilter === 'all' ? 'bg-indigo-800 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {countAll}
+              </span>
+            </button>
+
+            {/* Inputted Today Pill */}
+            <button
+              id="toolbar-filter-today"
+              type="button"
+              onClick={() => {
+                setQuickFilter('today');
+                setHasSearched(true);
+              }}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                quickFilter === 'today'
+                  ? 'bg-amber-600 border-amber-500 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className={`h-3.5 w-3.5 shrink-0 ${quickFilter === 'today' ? 'text-white' : 'text-amber-500'}`} />
+                <span className="text-[11px] font-bold truncate">Hari Ini (Baru)</span>
+              </div>
+              <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md shrink-0 ml-1 font-bold ${
+                quickFilter === 'today' ? 'bg-amber-800 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {countToday}
+              </span>
+            </button>
+
+            {/* Unsynced Pill */}
+            <button
+              id="toolbar-filter-unsynced"
+              type="button"
+              onClick={() => {
+                setQuickFilter('unsynced');
+                setHasSearched(true);
+              }}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                quickFilter === 'unsynced'
+                  ? 'bg-rose-600 border-rose-500 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <CloudOff className={`h-3.5 w-3.5 shrink-0 ${quickFilter === 'unsynced' ? 'text-white' : 'text-rose-500'}`} />
+                <span className="text-[11px] font-bold truncate">Belum Sinkron</span>
+              </div>
+              <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md shrink-0 ml-1 font-bold ${
+                quickFilter === 'unsynced' ? 'bg-rose-800 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {countUnsynced}
+              </span>
+            </button>
+
+            {/* PMKS Pill */}
+            <button
+              id="toolbar-filter-pmks"
+              type="button"
+              onClick={() => {
+                setQuickFilter('pmks');
+                setHasSearched(true);
+              }}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                quickFilter === 'pmks'
+                  ? 'bg-teal-600 border-teal-500 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <AlertCircle className={`h-3.5 w-3.5 shrink-0 ${quickFilter === 'pmks' ? 'text-white' : 'text-teal-500'}`} />
+                <span className="text-[11px] font-bold truncate">Data PMKS</span>
+              </div>
+              <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md shrink-0 ml-1 font-bold ${
+                quickFilter === 'pmks' ? 'bg-teal-800 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {countPmks}
+              </span>
+            </button>
+
+            {/* Usulan Baru Pill */}
+            <button
+              id="toolbar-filter-priority"
+              type="button"
+              onClick={() => {
+                setQuickFilter('priority');
+                setHasSearched(true);
+              }}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all cursor-pointer col-span-2 sm:col-span-1 ${
+                quickFilter === 'priority'
+                  ? 'bg-purple-600 border-purple-500 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <BookmarkCheck className={`h-3.5 w-3.5 shrink-0 ${quickFilter === 'priority' ? 'text-white' : 'text-purple-500'}`} />
+                <span className="text-[11px] font-bold truncate">Usulan Baru</span>
+              </div>
+              <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md shrink-0 ml-1 font-bold ${
+                quickFilter === 'priority' ? 'bg-purple-800 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {countPriority}
+              </span>
+            </button>
+          </div>
         </div>
 
-        {/* Filter Selection Panel */}
-        <div className="flex flex-wrap items-center gap-3.5">
-          {/* Kecamatan Saring */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-indigo-600" />
-              <span>Kecamatan:</span>
+        {/* Label & Search Input Section */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label htmlFor="table-search" className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Search className="h-4 w-4 text-indigo-600" />
+              Pencarian Data Sensus Keluarga
+            </label>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+              <span>Mendukung pencarian dinamis & real-time</span>
             </div>
+          </div>
+          
+          <div className="relative w-full">
+            <span className="absolute left-4 top-4 text-slate-400">
+              <Search className="h-5 w-5" />
+            </span>
+            <input
+              id="table-search"
+              type="text"
+              placeholder="Masukkan Nomor KK, Nama Kepala Keluarga, NIK Anggota, atau Nama Petugas..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full text-xs sm:text-sm p-4 pl-12 pr-12 rounded-xl border-2 border-slate-200 bg-slate-50/50 outline-hidden transition-all focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 font-medium text-slate-800 placeholder-slate-400/80 shadow-xs"
+            />
+            {searchTerm ? (
+              <button 
+                onClick={() => setSearchTerm('')} 
+                className="absolute right-4 top-4 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 p-1 rounded-full transition-all cursor-pointer"
+                title="Bersihkan Pencarian"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : (
+              <span className="absolute right-4 top-4.5 text-[10px] font-bold text-indigo-600/70 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                Sensus
+              </span>
+            )}
+          </div>
+
+          {/* Quick Guidance Tags */}
+          <div className="flex flex-wrap gap-1.5 pt-1 items-center">
+            <span className="text-[10px] text-slate-400 font-semibold mr-1">Saring cepat:</span>
+            <button 
+              type="button"
+              className="text-[9px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 font-bold border border-slate-200/50 cursor-pointer transition-colors" 
+              onClick={() => {
+                setSearchTerm('1274');
+                setActiveSearchTerm('1274');
+                setHasSearched(true);
+              }}
+            >
+              # Nomor KK
+            </button>
+            <button 
+              type="button"
+              className="text-[9px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 font-bold border border-slate-200/50 cursor-pointer transition-colors" 
+              onClick={() => {
+                setSearchTerm('Eka');
+                setActiveSearchTerm('Eka');
+                setHasSearched(true);
+              }}
+            >
+              # Nama Responden
+            </button>
+            <button 
+              type="button"
+              className="text-[9px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 font-bold border border-slate-200/50 cursor-pointer transition-colors" 
+              onClick={() => {
+                setSearchTerm('suryani');
+                setActiveSearchTerm('suryani');
+                setHasSearched(true);
+              }}
+            >
+              # Anggota Keluarga
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Grid of Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+          {/* Kecamatan Saring */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-indigo-600" />
+              <span>Kecamatan</span>
+            </label>
             <select
               id="table-filter-kecamatan"
               value={filterKecamatan}
               onChange={(e) => handleKecamatanChange(e.target.value)}
-              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 cursor-pointer shadow-2xs"
             >
               {kecamantanList.map((kec) => (
                 <option key={kec} value={kec}>{kec}</option>
@@ -445,13 +731,16 @@ export default function DataSummaryTable({
           </div>
 
           {/* Kelurahan Saring */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Kelurahan:</span>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <MapPin className="h-3.5 w-3.5 text-indigo-600" />
+              <span>Kelurahan</span>
+            </label>
             <select
               id="table-filter-kelurahan"
               value={filterKelurahan}
               onChange={(e) => setFilterKelurahan(e.target.value)}
-              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 cursor-pointer shadow-2xs"
             >
               {kelurahanList.map((kel) => (
                 <option key={kel} value={kel}>{kel}</option>
@@ -460,13 +749,16 @@ export default function DataSummaryTable({
           </div>
 
           {/* Status Sinkronisasi Saring */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Status Sinkronisasi:</span>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <RefreshCw className="h-3.5 w-3.5 text-indigo-600" />
+              <span>Status Sinkronisasi</span>
+            </label>
             <select
               id="table-filter-sync"
               value={filterSyncStatus}
               onChange={(e) => setFilterSyncStatus(e.target.value)}
-              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 cursor-pointer shadow-2xs"
             >
               <option value="Semua">Semua Status</option>
               <option value="synced">Tersinkronisasi (SYNC)</option>
@@ -475,13 +767,16 @@ export default function DataSummaryTable({
           </div>
 
           {/* Status Pendataan Saring */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Status Pendataan:</span>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <BookmarkCheck className="h-3.5 w-3.5 text-indigo-600" />
+              <span>Status Sensus</span>
+            </label>
             <select
               id="table-filter-status-pendataan"
               value={filterStatusPendataan}
               onChange={(e) => setFilterStatusPendataan(e.target.value)}
-              className="text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 cursor-pointer shadow-2xs"
             >
               <option value="Semua">Semua Status</option>
               {STATUS_PENDATAAN_OPTIONS.map((optVal) => (
@@ -489,6 +784,29 @@ export default function DataSummaryTable({
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Row 3: Action Buttons (Cari & Reset Filter) */}
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+          <button
+            id="btn-reset-filters"
+            type="button"
+            onClick={handleResetFilters}
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200 transition-all cursor-pointer shadow-3xs"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Reset Filter</span>
+          </button>
+          
+          <button
+            id="btn-submit-search"
+            type="button"
+            onClick={handleSearchSubmit}
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md cursor-pointer transition-all hover:translate-y-[-1px] active:translate-y-0"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span>Cari Data</span>
+          </button>
         </div>
       </div>
 
@@ -552,12 +870,16 @@ export default function DataSummaryTable({
       )}
 
       {/* Data Table */}
-      {filteredSurveys.length === 0 ? (
-        <div className="text-center py-12 bg-slate-50 border border-slate-100 rounded-2xl space-y-3">
-          <AlertCircle className="h-8 w-8 text-slate-400 mx-auto" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-700">Tidak ada data keluarga yang cocok</p>
-            <p className="text-xs text-slate-500">Pastikan pencarian atau filter wilayah Kecamatan Anda sesuai, atau tambahkan data baru.</p>
+      {!hasSearched ? (
+        <div className="text-center py-16 bg-white border border-slate-200/80 rounded-2xl space-y-3 shadow-3xs">
+          <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
+            <Search className="h-5 w-5 text-slate-400" />
+          </div>
+          <div className="space-y-1 text-slate-600">
+            <p className="text-sm font-semibold text-slate-800">Data Tidak Ditemukan</p>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              Silakan tentukan kriteria pencarian di atas dan klik tombol <strong>Cari Data</strong>.
+            </p>
           </div>
           {surveys.length === 0 && (
             <div className="pt-2">
@@ -571,6 +893,14 @@ export default function DataSummaryTable({
               </button>
             </div>
           )}
+        </div>
+      ) : filteredSurveys.length === 0 ? (
+        <div className="text-center py-12 bg-slate-50 border border-slate-100 rounded-2xl space-y-3">
+          <AlertCircle className="h-8 w-8 text-slate-400 mx-auto" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-700">Data Tidak Ditemukan</p>
+            <p className="text-xs text-slate-500">Pastikan pencarian atau filter wilayah Kecamatan Anda sesuai, atau tambahkan data baru.</p>
+          </div>
         </div>
       ) : (
         <div className="rounded-xl border border-slate-100 max-h-[400px] overflow-y-auto custom-scrollbar bg-white">

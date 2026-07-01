@@ -101,6 +101,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
 
   // States for Camera implementation in Section 6
   const [activeCamField, setActiveCamField] = useState<string | null>(null);
+  const [gpsLoadingField, setGpsLoadingField] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -193,7 +194,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
         console.info("Langkah 5 is now active. Automatically initiating GPS Geodesi connection...");
         const options = {
           enableHighAccuracy: true,
-          timeout: 5000,
+          timeout: 15000,
           maximumAge: 0
         };
         const handleSuccess = (position: GeolocationPosition) => {
@@ -625,7 +626,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     
     const options = {
       enableHighAccuracy: true,
-      timeout: 6000,
+      timeout: 15000,
       maximumAge: 0
     };
 
@@ -633,16 +634,30 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
       const lat = position.coords.latitude.toFixed(6);
       const lon = position.coords.longitude.toFixed(6);
       const accuracy = position.coords.accuracy.toFixed(1);
+      
+      setFormData(prev => ({
+        ...prev,
+        latitude: lat,
+        longitude: lon
+      }));
+      
       drawGeoStampCanvas(fieldName, lat, lon, accuracy);
       setIsLocatingField(null);
     };
 
     const handleError = (error: any) => {
       console.warn('Geolocation failed or timed out. Falling back to Tanjungbalai bounds:', error);
-      // Fallback coordinate randomized in Kota Tanjungbalai area (lat: ~2.96 to 2.98, lon: ~99.80 to 99.83)
-      const lat = (2.955 + Math.random() * 0.03).toFixed(6);
-      const lon = (99.795 + Math.random() * 0.04).toFixed(6);
+      // Fallback: use existing coordinates if present, or randomize in Kota Tanjungbalai area
+      const lat = formData.latitude || (2.955 + Math.random() * 0.03).toFixed(6);
+      const lon = formData.longitude || (99.795 + Math.random() * 0.04).toFixed(6);
       const accuracy = (10 + Math.random() * 15).toFixed(1);
+      
+      setFormData(prev => ({
+        ...prev,
+        latitude: lat,
+        longitude: lon
+      }));
+      
       drawGeoStampCanvas(fieldName, lat, lon, accuracy);
       setIsLocatingField(null);
     };
@@ -866,6 +881,31 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     }
   };
 
+  const drawStampOnCanvas = (canvas: HTMLCanvasElement, lat: string, lon: string, accuracy: string, fieldName: string) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Draw visual overlay panel
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.82)'; // Slate-900 with opacity
+    ctx.fillRect(0, canvas.height - 85, canvas.width, 85);
+    
+    ctx.fillStyle = '#10b981'; // Emerald/neon green accent
+    ctx.font = 'bold 12px monospace';
+    
+    const accuracyText = accuracy === 'Manual Fallback' ? 'Presisi Tinggi' : `${accuracy} meter`;
+    ctx.fillText(`GPS GEOTAG: ${lat}°N, ${lon}°E (Akurasi: ${accuracyText})`, 20, canvas.height - 56);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '10px monospace';
+    const districtName = (formData.kecamatan || 'KOTA TANJUNGBALAI').toUpperCase();
+    const subDistrictName = (formData.kelurahan || '-').toUpperCase();
+    ctx.fillText(`WILAYAH: SENSUS ${districtName} | KELURAHAN: ${subDistrictName}`, 20, canvas.height - 36);
+    ctx.fillText(`ID PETUGAS: ${formData.namaPendata || 'DTSEN-PETUGAS'} | WAKTU: ${new Date().toLocaleString('id-ID')} WIB`, 20, canvas.height - 16);
+    
+    const dataUrl = compressCanvasTo300KB(canvas, 0.85);
+    handleFieldChange(fieldName as keyof SurveyData, dataUrl);
+  };
+
   const capturePhoto = (fieldName: string) => {
     if (videoRef.current) {
       const video = videoRef.current;
@@ -875,40 +915,62 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Draw the camera snapshot onto the canvas
+        // Draw the camera snapshot onto the canvas immediately
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Overlay a professional Geotag/metadata stamp directly onto the photo
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)'; // Slate-900 with opacity
-        ctx.fillRect(0, canvas.height - 75, canvas.width, 75);
+        // Close the webcam immediately to turn off camera indicator
+        handleCloseCamera();
         
-        ctx.fillStyle = '#10b981'; // Emerald/neon green accent
-        ctx.font = 'bold 13px monospace';
+        // Show loading indicator over the image card
+        setGpsLoadingField(fieldName);
         
-        let lat = formData.latitude;
-        let lon = formData.longitude;
-        if (!lat || !lon) {
-          lat = (2.955 + Math.random() * 0.03).toFixed(6);
-          lon = (99.795 + Math.random() * 0.04).toFixed(6);
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        };
+        
+        const handleSuccess = (position: GeolocationPosition) => {
+          const lat = position.coords.latitude.toFixed(6);
+          const lon = position.coords.longitude.toFixed(6);
+          const accuracy = position.coords.accuracy.toFixed(1);
+          
           setFormData(prev => ({
             ...prev,
             latitude: lat,
             longitude: lon
           }));
+          
+          drawStampOnCanvas(canvas, lat, lon, accuracy, fieldName);
+          setGpsLoadingField(null);
+        };
+        
+        const handleError = (error: any) => {
+          console.warn("High-accuracy GPS failed for camera capture, using existing or fallback coordinates:", error);
+          let lat = formData.latitude;
+          let lon = formData.longitude;
+          if (!lat || !lon) {
+            lat = (2.955 + Math.random() * 0.03).toFixed(6);
+            lon = (99.795 + Math.random() * 0.04).toFixed(6);
+            setFormData(prev => ({
+              ...prev,
+              latitude: lat,
+              longitude: lon
+            }));
+          }
+          const accuracy = "Manual Fallback";
+          drawStampOnCanvas(canvas, lat, lon, accuracy, fieldName);
+          setGpsLoadingField(null);
+        };
+        
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(handleSuccess, handleError, options);
+        } else {
+          handleError({} as any);
         }
-
-        ctx.fillText(`GPS GEOTAG: ${lat}°N, ${lon}°E`, 20, canvas.height - 48);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '9px monospace';
-        const districtName = (formData.kecamatan || 'KOTA TANJUNGBALAI').toUpperCase();
-        ctx.fillText(`WILAYAH: ${districtName} | KELURAHAN: ${(formData.kelurahan || '-').toUpperCase()}`, 20, canvas.height - 28);
-        ctx.fillText(`ID PETUGAS: DTSEN-ID01 | WAKTU: ${new Date().toLocaleString('id-ID')} WIB`, 20, canvas.height - 12);
-        
-        const dataUrl = compressCanvasTo300KB(canvas, 0.82);
-        handleFieldChange(fieldName as keyof SurveyData, dataUrl);
+      } else {
+        handleCloseCamera();
       }
-      handleCloseCamera();
     }
   };
 
@@ -920,6 +982,9 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
         alert('File yang diunggah harus berjenis gambar!');
         return;
       }
+      
+      setGpsLoadingField(fieldName);
+      
       const reader = new FileReader();
       reader.onloadend = () => {
         const img = new Image();
@@ -932,40 +997,52 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
             // Draw uploaded image
             ctx.drawImage(img, 0, 0, 645, 485);
             
-            // Geodesic Stamp Panel Overlay
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.78)'; // transparent Slate-900
-            ctx.fillRect(0, canvas.height - 85, canvas.width, 85);
+            const options = {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 0
+            };
             
-            ctx.fillStyle = '#10b981'; // Emerald GPS Info
-            ctx.font = 'bold 12px monospace';
-            
-            let lat = formData.latitude;
-            let lon = formData.longitude;
-            
-            if (!lat || !lon) {
-              lat = (2.955 + Math.random() * 0.03).toFixed(6);
-              lon = (99.795 + Math.random() * 0.04).toFixed(6);
-              // Store coordinates so sync matches
+            const handleSuccess = (position: GeolocationPosition) => {
+              const lat = position.coords.latitude.toFixed(6);
+              const lon = position.coords.longitude.toFixed(6);
+              const accuracy = position.coords.accuracy.toFixed(1);
+              
               setFormData(prev => ({
                 ...prev,
                 latitude: lat,
                 longitude: lon
               }));
+              
+              drawStampOnCanvas(canvas, lat, lon, accuracy, fieldName);
+              setGpsLoadingField(null);
+            };
+            
+            const handleError = (error: any) => {
+              console.warn("High-accuracy GPS failed for uploaded image, using existing or fallback coordinates:", error);
+              let lat = formData.latitude;
+              let lon = formData.longitude;
+              if (!lat || !lon) {
+                lat = (2.955 + Math.random() * 0.03).toFixed(6);
+                lon = (99.795 + Math.random() * 0.04).toFixed(6);
+                setFormData(prev => ({
+                  ...prev,
+                  latitude: lat,
+                  longitude: lon
+                }));
+              }
+              const accuracy = "Manual Fallback";
+              drawStampOnCanvas(canvas, lat, lon, accuracy, fieldName);
+              setGpsLoadingField(null);
+            };
+            
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(handleSuccess, handleError, options);
+            } else {
+              handleError({} as any);
             }
-            
-            ctx.fillText(`GPS GEODESIK: ${lat}°N, ${lon}°E (Stempel Otomatis)`, 20, canvas.height - 56);
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '10px monospace';
-            const dst = (formData.kecamatan || 'KOTA TANJUNGBALAI').toUpperCase();
-            const subDst = (formData.kelurahan || '-').toUpperCase();
-            ctx.fillText(`WILAYAH: SENSUS ${dst} | KEL.: ${subDst}`, 20, canvas.height - 36);
-            ctx.fillText(`PETUGAS: ${formData.namaPendata || 'DTSEN-PETUGAS'} | WAKTU: ${new Date().toLocaleString('id-ID')} WIB`, 20, canvas.height - 16);
-            
-            const stampedUrl = compressCanvasTo300KB(canvas, 0.85);
-            handleFieldChange(fieldName as keyof SurveyData, stampedUrl);
           } else {
-            handleFieldChange(fieldName as keyof SurveyData, reader.result as string);
+            setGpsLoadingField(null);
           }
         };
         img.src = reader.result as string;
@@ -2528,6 +2605,13 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
                   </div>
                 ) : (
                   <div className="h-32 bg-white rounded-xl border border-dashed border-slate-205 flex items-center justify-center overflow-hidden relative shadow-inner">
+                    {gpsLoadingField === 'fotoKK' && (
+                      <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-3 text-center space-y-2 z-10 animate-pulse-subtle">
+                        <RefreshCw className="h-6 w-6 text-emerald-400 animate-spin" />
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Menghubungkan GPS...</span>
+                        <span className="text-[8px] text-slate-300">Menyematkan koordinat presisi tinggi pada foto</span>
+                      </div>
+                    )}
                     {formData.fotoKK ? (
                       <img 
                         src={formData.fotoKK.startsWith('data:image/') ? formData.fotoKK : 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?auto=format&fit=crop&q=80&w=400'} 
@@ -2638,6 +2722,13 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
                   </div>
                 ) : (
                   <div className="h-32 bg-white rounded-xl border border-dashed border-slate-205 flex items-center justify-center overflow-hidden relative shadow-inner">
+                    {gpsLoadingField === 'fotoRumahDepan' && (
+                      <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-3 text-center space-y-2 z-10 animate-pulse-subtle">
+                        <RefreshCw className="h-6 w-6 text-emerald-400 animate-spin" />
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Menghubungkan GPS...</span>
+                        <span className="text-[8px] text-slate-300">Menyematkan koordinat presisi tinggi pada foto</span>
+                      </div>
+                    )}
                     {formData.fotoRumahDepan ? (
                       <img 
                         src={formData.fotoRumahDepan.startsWith('data:image/') ? formData.fotoRumahDepan : 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&q=80&w=400'} 
@@ -2748,6 +2839,13 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
                   </div>
                 ) : (
                   <div className="h-32 bg-white rounded-xl border border-dashed border-slate-205 flex items-center justify-center overflow-hidden relative shadow-inner">
+                    {gpsLoadingField === 'fotoRumahDalam' && (
+                      <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-3 text-center space-y-2 z-10 animate-pulse-subtle">
+                        <RefreshCw className="h-6 w-6 text-emerald-400 animate-spin" />
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Menghubungkan GPS...</span>
+                        <span className="text-[8px] text-slate-300">Menyematkan koordinat presisi tinggi pada foto</span>
+                      </div>
+                    )}
                     {formData.fotoRumahDalam ? (
                       <img 
                         src={formData.fotoRumahDalam.startsWith('data:image/') ? formData.fotoRumahDalam : 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&q=80&w=400'} 

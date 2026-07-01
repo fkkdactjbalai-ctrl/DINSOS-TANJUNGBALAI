@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, UserCheck, KeyRound, AlertCircle, Eye, EyeOff, Lock, HeartHandshake, UserPlus, LogIn, ChevronRight } from 'lucide-react';
-import { isFirebaseConfigured, fetchUserFromFirestore, saveUserToFirestore } from '../utils/syncService';
+import { isFirebaseConfigured, fetchUserFromFirestore, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
 
 interface LoginScreenProps {
   onLoginSuccess: (role: 'admin' | 'pendata', username: string, fullname: string) => void;
@@ -9,6 +9,13 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [roleSelection, setRoleSelection] = useState<'admin' | 'pendata'>('pendata');
+  const [quotaExceeded, setQuotaExceeded] = useState(isFirestoreQuotaExceeded());
+  
+  useEffect(() => {
+    registerQuotaExceededCallback((val) => {
+      setQuotaExceeded(val);
+    });
+  }, []);
   
   // Login fields
   const [username, setUsername] = useState('');
@@ -305,8 +312,20 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             <Lock className="h-3 w-3" />
             Secure Portal
           </div>
-          <span className="absolute top-4 right-4 bg-emerald-500/30 text-emerald-300 border border-emerald-400/20 text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full select-none font-mono">
-            {isFirebaseConfigured ? '🟢 CLOUD SYNC ACTIVE' : '🔴 LOCAL OFFLINE MODE'}
+          <span className="absolute top-4 right-4 text-[9px] font-bold tracking-wider select-none font-mono">
+            {quotaExceeded ? (
+              <span className="bg-amber-500/30 text-amber-300 border border-amber-400/20 px-2 py-0.5 rounded-full">
+                ⚠️ CLOUD QUOTA EXCEEDED (LOCAL MODE)
+              </span>
+            ) : isFirebaseConfigured ? (
+              <span className="bg-emerald-500/30 text-emerald-300 border border-emerald-400/20 px-2 py-0.5 rounded-full">
+                🟢 CLOUD SYNC ACTIVE
+              </span>
+            ) : (
+              <span className="bg-rose-500/30 text-rose-300 border border-rose-400/20 px-2 py-0.5 rounded-full">
+                🔴 LOCAL OFFLINE MODE
+              </span>
+            )}
           </span>
           
           <div className="mx-auto w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-xs mb-4">
@@ -357,6 +376,16 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         {/* Form Body */}
         <div className="p-6 sm:p-8 space-y-5">
+          {quotaExceeded && (
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-800 rounded-2xl text-[11px] leading-relaxed flex items-start gap-2.5 animate-pulse-subtle">
+              <AlertCircle className="h-4.5 w-4.5 shrink-0 text-amber-600 mt-0.5" />
+              <div>
+                <span className="font-bold block text-amber-900">Mode Lokal Aktif (Kuota Cloud Terlampaui)</span>
+                Sensus cloud sedang melebihi batas kuota gratis harian. 
+                Sistem telah beralih sepenuhnya ke **Penyimpanan Lokal (Offline)**. Anda tetap bisa Masuk/Daftar Akun dan mendata dengan aman secara lokal di perangkat ini!
+              </div>
+            </div>
+          )}
           {/* Role Choice */}
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">

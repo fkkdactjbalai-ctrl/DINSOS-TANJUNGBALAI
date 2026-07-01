@@ -42,6 +42,42 @@ if (isFirebaseConfigured) {
 
 export { app, db, auth };
 
+let firestoreQuotaExceeded = false;
+let quotaExceededCallback: ((val: boolean) => void) | null = null;
+
+export function isFirestoreQuotaExceeded(): boolean {
+  return firestoreQuotaExceeded;
+}
+
+export function setFirestoreQuotaExceeded(val: boolean) {
+  if (firestoreQuotaExceeded !== val) {
+    firestoreQuotaExceeded = val;
+    if (quotaExceededCallback) {
+      quotaExceededCallback(val);
+    }
+  }
+}
+
+export function registerQuotaExceededCallback(cb: (val: boolean) => void) {
+  quotaExceededCallback = cb;
+  cb(firestoreQuotaExceeded);
+}
+
+export function checkIfQuotaError(error: unknown): boolean {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  if (
+    errMsg.toLowerCase().includes('quota') ||
+    errMsg.toLowerCase().includes('resource_exhausted') ||
+    errMsg.toLowerCase().includes('resource exhausted') ||
+    errMsg.toLowerCase().includes('exceeded') ||
+    errMsg.toLowerCase().includes('limit')
+  ) {
+    setFirestoreQuotaExceeded(true);
+    return true;
+  }
+  return false;
+}
+
 // Core Operation types for structured error telemetry
 export enum OperationType {
   CREATE = 'create',
@@ -73,6 +109,7 @@ export interface FirestoreErrorInfo {
  * Handles errors arising from Firestore security rule check failures, conformant with high-stakes skill mandates.
  */
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  checkIfQuotaError(error);
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: auth ? {
@@ -406,8 +443,8 @@ export async function fetchSurveysFromGoogleAppsScript(
  * Ensures metadata control documents are filtered out, maintaining clean application state.
  */
 export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): () => void {
-  if (!isFirebaseConfigured || !db) {
-    console.info("Firebase Firestore is currently unconfigured or in offline mode. Real-time active listener deferred.");
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    console.info("Firebase Firestore is currently unconfigured, in offline mode, or quota is exceeded. Real-time active listener deferred.");
     return () => {};
   }
 
@@ -426,6 +463,7 @@ export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): (
       onUpdate(data);
     }, (error) => {
       try {
+        checkIfQuotaError(error);
         handleFirestoreError(error, OperationType.LIST, 'surveys');
       } catch (e) {
         console.warn("Real-time listener failed gracefully:", e);
@@ -493,17 +531,39 @@ export async function clearAllSurveysFromFirestore(): Promise<boolean> {
  * Supports online multi-device login validation and sync.
  */
 export async function fetchUserFromFirestore(username: string): Promise<any | null> {
-  if (!isFirebaseConfigured || !db) return null;
+  const safeUsername = (username || '').toLowerCase().trim();
+  if (!safeUsername) return null;
+
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+    const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+    return offlineUsers[safeUsername] || null;
+  }
   try {
     await ensureAuthenticated();
-    const userDoc = await getDoc(doc(db, 'users', username));
+    const userDoc = await getDoc(doc(db, 'users', safeUsername));
     if (userDoc.exists()) {
-      return userDoc.data();
+      const data = userDoc.data();
+      // Cache this user data locally
+      try {
+        const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+        const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+        offlineUsers[safeUsername] = { ...offlineUsers[safeUsername], ...data };
+        localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+      } catch (cacheErr) {
+        console.warn("Failed to cache fetched user locally:", cacheErr);
+      }
+      return data;
     }
     return null;
   } catch (error) {
     console.warn("Error fetching user from Firestore:", error);
-    return null;
+    checkIfQuotaError(error);
+    
+    // Fallback to offline local users
+    const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+    const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+    return offlineUsers[safeUsername] || null;
   }
 }
 
@@ -511,19 +571,21 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
  * Creates/registers a user document in Firestore.
  */
 export async function saveUserToFirestore(username: string, userData: any): Promise<boolean> {
-  const safeUsername = (username || '').toLowerCase();
+  const safeUsername = (username || '').toLowerCase().trim();
   if (!safeUsername) return false;
-  if (!isFirebaseConfigured || !db) {
-    // Save to local storage offline users too
-    try {
-      const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
-      const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-      offlineUsers[safeUsername] = { ...offlineUsers[safeUsername], ...userData };
-      localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
-    } catch (e) {
-      console.warn(e);
-    }
-    return true;
+
+  // Always cache/save to local storage offline users
+  try {
+    const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+    const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+    offlineUsers[safeUsername] = { ...offlineUsers[safeUsername], ...userData };
+    localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+  } catch (e) {
+    console.warn("Error caching user offline:", e);
+  }
+
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    return true; // Saved locally
   }
   try {
     await ensureAuthenticated();
@@ -531,6 +593,7 @@ export async function saveUserToFirestore(username: string, userData: any): Prom
     return true;
   } catch (error) {
     console.error("Error saving user to Firestore: ", error);
+    checkIfQuotaError(error);
     handleFirestoreError(error, OperationType.WRITE, `users/${safeUsername}`);
     return false;
   }
@@ -540,7 +603,7 @@ export async function saveUserToFirestore(username: string, userData: any): Prom
  * Fetches all users from Firestore or offline backup for admin control approval.
  */
 export async function fetchAllUsersFromFirestore(): Promise<any[]> {
-  if (!isFirebaseConfigured || !db) {
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
     const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
     const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
     return Object.values(offlineUsers);
@@ -555,6 +618,7 @@ export async function fetchAllUsersFromFirestore(): Promise<any[]> {
     return list;
   } catch (error) {
     console.warn("Unable to fetch all users online, loading offline local list:", error);
+    checkIfQuotaError(error);
     const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
     const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
     return Object.values(offlineUsers);
@@ -567,16 +631,19 @@ export async function fetchAllUsersFromFirestore(): Promise<any[]> {
 export async function deleteUserFromFirestore(username: string): Promise<boolean> {
   const safeUsername = (username || '').toLowerCase();
   if (!safeUsername) return false;
-  if (!isFirebaseConfigured || !db) {
-    try {
-      const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
-      const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-      delete offlineUsers[safeUsername];
-      localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
-      return true;
-    } catch (err) {
-      return false;
-    }
+
+  // Always delete locally as well
+  try {
+    const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+    const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+    delete offlineUsers[safeUsername];
+    localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+  } catch (err) {
+    console.warn("Error deleting user locally:", err);
+  }
+
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    return true;
   }
   try {
     await ensureAuthenticated();
@@ -584,6 +651,7 @@ export async function deleteUserFromFirestore(username: string): Promise<boolean
     return true;
   } catch (error) {
     console.error("Error deleting user from Firestore:", error);
+    checkIfQuotaError(error);
     return false;
   }
 }
@@ -598,9 +666,10 @@ export async function saveUserDraftToFirestore(
 ): Promise<boolean> {
   const serialized = draftData ? JSON.stringify(draftData) : null;
   
-  if (!isFirebaseConfigured || !db) {
-    // If not configured, save locally only
-    localStorage.setItem(`dtsen_draft_${username}`, JSON.stringify({ currentStep, draftData }));
+  // Backup locally always
+  localStorage.setItem(`dtsen_draft_${username}`, JSON.stringify({ currentStep, draftData }));
+
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
     return true;
   }
   try {
@@ -610,13 +679,10 @@ export async function saveUserDraftToFirestore(
       draft_data: serialized,
       updated_at: new Date().toISOString()
     }, { merge: true });
-    
-    // Also backup locally always
-    localStorage.setItem(`dtsen_draft_${username}`, JSON.stringify({ currentStep, draftData }));
     return true;
   } catch (error) {
     console.warn("Unable to save draft to Firestore, backed up locally:", error);
-    localStorage.setItem(`dtsen_draft_${username}`, JSON.stringify({ currentStep, draftData }));
+    checkIfQuotaError(error);
     return false;
   }
 }

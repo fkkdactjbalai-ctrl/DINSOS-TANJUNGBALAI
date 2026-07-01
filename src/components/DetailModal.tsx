@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { X, Printer, Phone, Calendar, User, Eye, Download, Users, FileText } from 'lucide-react';
 import { SurveyData } from '../types';
 import { formatRupiah } from '../utils/csvExport';
+import { generatePrintableHtml } from '../utils/printGenerator';
 
 interface DetailModalProps {
   survey: SurveyData | null;
@@ -11,10 +12,31 @@ interface DetailModalProps {
 }
 
 export default function DetailModal({ survey, onClose, autoPrint, onPrinted }: DetailModalProps) {
+  const handlePrintClick = () => {
+    if (!survey) return;
+    try {
+      const htmlContent = generatePrintableHtml(survey);
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const printWindow = window.open(blobUrl, '_blank');
+      if (!printWindow) {
+        // Fallback using automatic trigger if popups are blocked by standard sandbox settings
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.target = '_blank';
+        link.click();
+      }
+    } catch (error) {
+      console.error('Print generation failed, fallback to native window print:', error);
+      window.print();
+    }
+  };
+
   useEffect(() => {
     if (autoPrint && survey) {
       const timer = setTimeout(() => {
-        window.print();
+        handlePrintClick();
         if (onPrinted) onPrinted();
       }, 500);
       return () => clearTimeout(timer);
@@ -444,7 +466,7 @@ export default function DetailModal({ survey, onClose, autoPrint, onPrinted }: D
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 rounded-b-2xl flex items-center justify-end gap-3">
           <button 
             id="btn-print-survey"
-            onClick={() => window.print()} 
+            onClick={handlePrintClick} 
             className="flex items-center gap-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 py-2 px-4 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-colors cursor-pointer select-none"
           >
             <Printer className="h-4 w-4" />

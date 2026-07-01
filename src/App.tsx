@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database, LogOut, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database, LogOut, ShieldAlert, LayoutDashboard, UserCheck, FileText, Map, CloudOff, RefreshCw, Download, Upload } from 'lucide-react';
 import { SurveyData } from './types';
 import Header from './components/Header';
 import SurveyWizardForm from './components/SurveyWizardForm';
@@ -13,12 +13,26 @@ import {
   subscribeToSurveys,
   deleteSurveyFromFirestore,
   clearAllSurveysFromFirestore,
-  isFirebaseConfigured
+  isFirebaseConfigured,
+  isFirestoreQuotaExceeded,
+  registerQuotaExceededCallback
 } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
 import QuickStats from './components/QuickStats';
 import AdminUserApprovalPanel from './components/AdminUserApprovalPanel';
+import MetricsGrid from './components/MetricsGrid';
+
+interface UndoAction {
+  type: 'delete_survey' | 'clear_all' | 'save_survey';
+  payload: {
+    survey?: SurveyData;
+    index?: number;
+    previousSurveys?: SurveyData[];
+    savedId?: string;
+  };
+  message: string;
+}
 
 export default function App() {
   const [userRole, setUserRole] = useState<'admin' | 'pendata' | null>(() => {
@@ -36,6 +50,66 @@ export default function App() {
   const [autoPrintActive, setAutoPrintActive] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'danger' } | null>(null);
   const [isPullingCloud, setIsPullingCloud] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>('database-section');
+  const [quickFilter, setQuickFilter] = useState<'all' | 'today' | 'unsynced' | 'pmks' | 'priority'>('all');
+  const [hasSearched, setHasSearched] = useState(false);
+  const [lastAction, setLastAction] = useState<UndoAction | null>(null);
+  const [isUndoToastVisible, setIsUndoToastVisible] = useState(false);
+  const [quotaExceeded, setQuotaExceeded] = useState(isFirestoreQuotaExceeded());
+
+  useEffect(() => {
+    registerQuotaExceededCallback((val) => {
+      setQuotaExceeded(val);
+    });
+  }, []);
+
+  // Stats for the quick monitoring toolbar
+  const todayStr = new Date().toDateString();
+  const countAll = surveys.length;
+  const countToday = surveys.filter(s => s.submittedAt && new Date(s.submittedAt).toDateString() === todayStr).length;
+  const countUnsynced = surveys.filter(s => !s.synced).length;
+  const countPmks = surveys.filter(s => (s.anggotaKeluarga || []).some(m => m.isPmks === 'Ya')).length;
+  const countPriority = surveys.filter(s => s.statusPendataan === 'Usulan Baru').length;
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = ['database-section', 'wizard-form-section', 'spatial-map-section'];
+      if (userRole === 'admin') {
+        sections.push('user-approval-panel-section');
+      }
+      
+      let currentSection = 'database-section';
+      let minDistance = Infinity;
+      
+      sections.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const distance = Math.abs(rect.top - 120);
+          if (distance < minDistance) {
+            minDistance = distance;
+            currentSection = id;
+          }
+        }
+      });
+      
+      setActiveSection(currentSection);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [userRole]);
+
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      const yOffset = -100;
+      const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+      setActiveSection(id);
+    }
+  };
 
   const handlePrint = (survey: SurveyData) => {
     setSelectedSurvey(survey);
@@ -114,9 +188,11 @@ export default function App() {
       setSurveys(prev => {
         const mergedDict: { [id: string]: SurveyData } = {};
         
-        // Seed ONLY with current local unsynced surveys so deletions/clearing in Firestore propagate in real-time
+        // Seed with current local surveys:
+        // Always keep unsynced surveys.
+        // Keep synced surveys if the cloud is currently empty (to prevent wiping local data on a fresh/empty database or read failures).
         prev.forEach(s => {
-          if (!s.synced) {
+          if (!s.synced || cloudSurveys.length === 0) {
             mergedDict[s.id] = s;
           }
         });
@@ -146,6 +222,182 @@ export default function App() {
       setToastMessage(null);
     }, 4500);
   };
+
+  const triggerUndo = () => {
+    if (!lastAction) return;
+
+    try {
+      if (lastAction.type === 'delete_survey') {
+        const { survey, index } = lastAction.payload;
+        if (survey) {
+          const updated = [...surveys];
+          if (index !== undefined && index >= 0 && index <= surveys.length) {
+            updated.splice(index, 0, survey);
+          } else {
+            updated.unshift(survey);
+          }
+          saveToLocalStorage(updated);
+          
+          if (isFirebaseConfigured) {
+            sendSurveyToGoogleAppsScript(syncUrl, survey).catch(err => console.warn('Cloud undo restore issue:', err));
+          }
+          
+          showToast(`Berhasil Membatalkan: Data KK ${survey.noKK} dikembalikan ke database.`, 'success');
+        }
+      } else if (lastAction.type === 'clear_all') {
+        const { previousSurveys } = lastAction.payload;
+        if (previousSurveys && previousSurveys.length > 0) {
+          saveToLocalStorage(previousSurveys);
+          
+          if (isFirebaseConfigured) {
+            previousSurveys.forEach(s => {
+              sendSurveyToGoogleAppsScript(syncUrl, s).catch(err => console.warn('Cloud undo bulk restore issue:', err));
+            });
+          }
+          
+          showToast(`Berhasil Membatalkan: ${previousSurveys.length} data dikembalikan ke database.`, 'success');
+        }
+      } else if (lastAction.type === 'save_survey') {
+        const { previousSurveys, savedId } = lastAction.payload;
+        if (previousSurveys) {
+          saveToLocalStorage(previousSurveys);
+          
+          if (savedId && isFirebaseConfigured) {
+            deleteSurveyFromFirestore(savedId).catch(err => console.warn('Cloud undo save delete issue:', err));
+          }
+          
+          showToast('Berhasil Membatalkan: Penyimpanan data berhasil dibatalkan.', 'info');
+        }
+      }
+    } catch (error) {
+      console.error('Error executing undo action:', error);
+      showToast('Gagal memproses pembatalan aksi (Undo).', 'danger');
+    }
+
+    setLastAction(null);
+    setIsUndoToastVisible(false);
+  };
+
+  const handleExportData = () => {
+    try {
+      const surveysData = localStorage.getItem('sensus_surveys_v2') || '[]';
+      const offlineUsersData = localStorage.getItem('dtsen_offline_users') || '{}';
+      
+      const backupObject = {
+        backupVersion: '2.0',
+        exportedAt: new Date().toISOString(),
+        surveys: JSON.parse(surveysData),
+        offlineUsers: JSON.parse(offlineUsersData),
+        appSettings: {
+          syncUrl: localStorage.getItem('dtsen_sync_url') || '',
+          autoSync: localStorage.getItem('dtsen_auto_sync') !== 'false'
+        }
+      };
+
+      const dataStr = JSON.stringify(backupObject, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+      const exportFileDefaultName = `dtsen_sensus_backup_${new Date().toISOString().slice(0, 10)}.json`;
+
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+
+      showToast('Cadangan berhasil diekspor! Simpan file JSON ini di tempat aman.', 'success');
+    } catch (e) {
+      console.error('Export backup failed:', e);
+      showToast('Gagal mengekspor cadangan data!', 'danger');
+    }
+  };
+
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    fileReader.onload = (e) => {
+      try {
+        const parsedData = JSON.parse(e.target?.result as string);
+        
+        // Validation checks
+        if (!parsedData || typeof parsedData !== 'object') {
+          throw new Error('Format JSON tidak valid.');
+        }
+
+        const restoredSurveys = parsedData.surveys;
+        if (!Array.isArray(restoredSurveys)) {
+          throw new Error('Data Sensus (surveys) tidak ditemukan atau formatnya salah.');
+        }
+
+        // Write to localStorage
+        localStorage.setItem('sensus_surveys_v2', JSON.stringify(restoredSurveys));
+        setSurveys(restoredSurveys);
+
+        if (parsedData.offlineUsers && typeof parsedData.offlineUsers === 'object') {
+          localStorage.setItem('dtsen_offline_users', JSON.stringify(parsedData.offlineUsers));
+        }
+
+        if (parsedData.appSettings) {
+          if (parsedData.appSettings.syncUrl) {
+            localStorage.setItem('dtsen_sync_url', parsedData.appSettings.syncUrl);
+            setSyncUrl(parsedData.appSettings.syncUrl);
+          }
+          if (parsedData.appSettings.autoSync !== undefined) {
+            localStorage.setItem('dtsen_auto_sync', String(parsedData.appSettings.autoSync));
+            setIsAutoSync(parsedData.appSettings.autoSync);
+          }
+        }
+
+        showToast(`Pemulihan Berhasil! Berhasil memuat ${restoredSurveys.length} data sensus dan akun pengguna offline.`, 'success');
+        
+        // Reset file input element
+        if (event.target) {
+          event.target.value = '';
+        }
+      } catch (err: any) {
+        console.error('Import failed:', err);
+        showToast(`Gagal memulihkan data: ${err?.message || 'File tidak valid'}`, 'danger');
+      }
+    };
+
+    fileReader.readAsText(file);
+  };
+
+  // Prevent browser back button from exiting the app accidentally
+  useEffect(() => {
+    if (!userRole) return;
+
+    // Push initial history state to trap back clicks
+    window.history.pushState({ app: 'siks' }, '', window.location.href);
+
+    const handlePopState = (e: PopStateEvent) => {
+      // Re-push history state immediately to keep the trap alive
+      window.history.pushState({ app: 'siks' }, '', window.location.href);
+
+      // Custom undo/back behavior inside the app
+      if (selectedSurvey) {
+        setSelectedSurvey(null);
+        showToast('Undo: Tampilan detail ditutup.', 'info');
+      } else if (editingSurvey) {
+        setEditingSurvey(null);
+        showToast('Undo: Pengeditan dibatalkan.', 'info');
+      } else if (lastAction) {
+        triggerUndo();
+      } else {
+        const confirmExit = window.confirm("Apakah Anda yakin ingin keluar dari Aplikasi Sensus SIKS-NG Kota Tanjungbalai?");
+        if (confirmExit) {
+          window.removeEventListener('popstate', handlePopState);
+          window.history.back();
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [userRole, selectedSurvey, editingSurvey, lastAction, surveys]);
 
   // Automatic background synchronization for all unsynced surveys
   const syncingInProgressRef = useRef<Set<string>>(new Set());
@@ -201,6 +453,7 @@ export default function App() {
 
   // Create or Update survey submission
   const handleSurveySubmit = (submittedData: SurveyData) => {
+    const previous = [...surveys];
     let updatedSurveys: SurveyData[] = [];
     let finalSurveyToSync: SurveyData;
     let targetSurveyId: string;
@@ -237,6 +490,14 @@ export default function App() {
     }
 
     saveToLocalStorage(updatedSurveys);
+
+    // Store for Undo
+    setLastAction({
+      type: 'save_survey',
+      payload: { previousSurveys: previous, savedId: targetSurveyId },
+      message: editingSurvey ? `Modifikasi data KK ${submittedData.noKK} disimpan.` : `Data baru KK ${submittedData.noKK} disimpan.`
+    });
+    setIsUndoToastVisible(true);
 
     // Write directly to Firestore if online
     if (isFirebaseConfigured) {
@@ -396,12 +657,23 @@ export default function App() {
 
   // Delete a survey from history
   const handleDeleteSurvey = (id: string) => {
-    const surveyToDelete = surveys.find(s => s.id === id);
+    const indexToDelete = surveys.findIndex(s => s.id === id);
+    if (indexToDelete === -1) return;
+
+    const surveyToDelete = surveys[indexToDelete];
     const updated = surveys.filter(s => s.id !== id);
     saveToLocalStorage(updated);
     
     // Also delete from Firestore
     deleteSurveyFromFirestore(id);
+
+    // Store for Undo
+    setLastAction({
+      type: 'delete_survey',
+      payload: { survey: surveyToDelete, index: indexToDelete },
+      message: `Data KK ${surveyToDelete.noKK} berhasil dihapus.`
+    });
+    setIsUndoToastVisible(true);
     
     showToast(`Rekaman DTSEN KK ${surveyToDelete?.noKK} telah dihapus dari kearsipan lokal dan cloud database.`, 'danger');
     
@@ -419,9 +691,24 @@ export default function App() {
 
   // Clear all surveys from database
   const handleClearAll = () => {
+    if (surveys.length === 0) {
+      showToast('Database kearsipan sudah kosong.', 'info');
+      return;
+    }
+
+    const previous = [...surveys];
     saveToLocalStorage([]);
     setEditingSurvey(null);
     clearAllSurveysFromFirestore();
+
+    // Store for Undo
+    setLastAction({
+      type: 'clear_all',
+      payload: { previousSurveys: previous },
+      message: `${previous.length} rekaman data dikosongkan.`
+    });
+    setIsUndoToastVisible(true);
+    
     showToast('Seluruh data DTSEN di LocalStorage berhasil dikosongkan.', 'danger');
   };
 
@@ -465,147 +752,502 @@ export default function App() {
         </div>
       )}
 
-      {/* Header Statistics Card */}
-      <Header surveys={surveys} />
-
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-12">
-        
-        {/* Welcome and guidelines section */}
-        <div className="w-full bg-linear-to-r from-indigo-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          {/* Background graphic touch */}
-          <div className="absolute right-0 bottom-0 opacity-10 select-none pointer-events-none transform translate-y-12 translate-x-12 scale-150">
-            <Database className="h-60 w-60" />
-          </div>
-
-          <div className="max-w-xl space-y-3 relative z-10">
-            <span className="px-2 py-1 text-[10px] font-bold tracking-widest bg-indigo-700 rounded-md uppercase">
-              Petunjuk Petugas Pendataan
+      {/* Interactive Floating Undo Banner */}
+      {lastAction && isUndoToastVisible && (
+        <div className="fixed bottom-5 left-5 z-50 p-4 bg-slate-900/95 border border-slate-700 text-white rounded-2xl shadow-2xl flex items-center justify-between gap-4 max-w-sm backdrop-blur-md animate-pulse-subtle">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="flex h-2.5 w-2.5 relative shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400"></span>
             </span>
-            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
-              Pendataan DTSEN Kota Tanjungbalai
-            </h2>
-            <p className="text-xs text-indigo-100 leading-relaxed font-light">
-              Membantu Rukun Tetangga dan Dinas Kependudukan serta Sosial Kota Tanjungbalai merekam profil kesejahteraan, kepemilikan aset, 
-              riwayat gizi balita, pendidikan, serta ketenagakerjaan jiwa-jiwa di berbagai kelurahan.
-            </p>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 pt-2 font-mono text-[10px] text-indigo-200">
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                Autosave Lokal
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                Kalkulasi Umur Otomatis
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                Live WebRTC snapshot
-              </span>
+            <div className="truncate text-xs">
+              <span className="text-slate-400 font-bold block text-[9px] uppercase tracking-wider">Aksi Terakhir</span>
+              <span className="truncate font-medium text-slate-100">{lastAction.message}</span>
             </div>
           </div>
+          <button
+            id="floating-undo-btn"
+            type="button"
+            onClick={triggerUndo}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-xl transition-all cursor-pointer shadow-xs hover:scale-[1.03] active:scale-[0.97]"
+          >
+            <RefreshCw className="h-3 w-3" />
+            <span>Undo</span>
+          </button>
+        </div>
+      )}
 
-          {/* User information & Logout actions */}
-          <div className="relative z-10 shrink-0 bg-white/10 backdrop-blur-xs p-5 rounded-2xl border border-white/15 space-y-4 w-full md:max-w-xs">
-            <div className="space-y-1">
-              <p className="text-[10px] opacity-70 uppercase tracking-wider font-semibold text-indigo-300">Sesi Aktif</p>
-              <div className="text-xs font-bold flex items-center gap-2 text-indigo-100">
-                <span className={`inline-block h-2.5 w-2.5 rounded-full animate-pulse ${userRole === 'admin' ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
-                <span>{userRole === 'admin' ? 'Administrator (Full Access)' : 'Petugas Pendata (Akses Lapangan)'}</span>
+      {/* Header Statistics Card */}
+      <Header />
+
+      {quotaExceeded && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-3 sm:px-6 lg:px-8 border-b border-amber-600 shadow-sm non-printable animate-pulse-subtle">
+          <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="h-5 w-5 text-slate-950 shrink-0" />
+              <div className="text-xs sm:text-sm font-semibold">
+                <span className="font-extrabold">MODE LOKAL/OFFLINE AKTIF:</span> Kuota harian database cloud Google Firestore telah terlampaui. Semua data Anda dimuat &amp; disimpan secara mandiri dan aman di penyimpanan lokal (peramban) perangkat ini. Anda dapat terus mendata dengan lancar!
               </div>
             </div>
-            
-            {userRole === 'pendata' && (
-              <div className="text-[10px] text-indigo-200 leading-relaxed bg-black/20 p-2.5 rounded-xl border border-white/5 space-y-1">
-                <p className="font-bold text-emerald-300 flex items-center gap-1">
-                  <ShieldAlert className="h-3.5 w-3.5 text-emerald-400" />
-                  Keamanan Data Aktif:
-                </p>
-                <p>Database histori aktif untuk pemantauan, pengeditan, serta alat penghapusan &amp; pengosongan data secara penuh.</p>
-              </div>
-            )}
-
-            <button
-              onClick={handleLogout}
-              className="w-full py-2.5 px-4 rounded-xl bg-indigo-950/40 hover:bg-rose-900/80 text-indigo-200 hover:text-white font-bold text-[10.5px] uppercase cursor-pointer select-none border border-white/10 hover:border-rose-800 transition-all flex items-center justify-center gap-1.5 shadow-xs"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Keluar Sesi
-            </button>
+            <div className="text-[10px] font-mono bg-slate-950/20 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider shrink-0">
+              Offline Cache Enabled
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Admin User Approval Management Panel */}
-        {userRole === 'admin' && (
-          <section id="user-approval-panel-section" className="space-y-4">
-            <AdminUserApprovalPanel onShowToast={showToast} currentUser={username} />
-          </section>
-        )}
+      {/* Main Container */}
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full">
+        
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* Left Sticky Sidebar: Petunjuk Petugas Pendataan */}
+          <aside className="lg:col-span-4 lg:sticky lg:top-24 space-y-6 non-printable">
+            <div className="w-full bg-linear-to-b from-indigo-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl relative overflow-hidden shadow-md flex flex-col gap-6">
+              {/* Background graphic touch */}
+              <div className="absolute right-0 bottom-0 opacity-10 select-none pointer-events-none transform translate-y-12 translate-x-12 scale-150">
+                <Database className="h-60 w-60" />
+              </div>
 
-        {/* Wizard Form Section */}
-        <section id="wizard-form-section" className="space-y-4">
-          {editingSurvey && (
-            <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl flex items-center justify-between text-xs font-semibold">
-              <span className="flex items-center gap-2">
-                <Edit3 className="h-4 w-4 text-blue-600 animate-pulse" />
-                <span>Sedang Memodifikasi DTSEN untuk No KK: <b>{editingSurvey.noKK}</b> (Responden: {editingSurvey.namaResponden})</span>
-              </span>
-              <button 
-                onClick={() => {
-                  setEditingSurvey(null);
-                  showToast('Modifikasi sensor dibatalkan, mengembalikan ke forms baru.', 'info');
-                }} 
-                className="text-[11px] bg-white border text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-50 cursor-pointer"
-              >
-                Batal Edit
-              </button>
+              <div className="space-y-3 relative z-10">
+                <span className="px-2 py-1 text-[10px] font-bold tracking-widest bg-indigo-700 rounded-md uppercase">
+                  Petunjuk Petugas Pendataan
+                </span>
+                <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+                  Pendataan DTSEN Kota Tanjungbalai
+                </h2>
+                <p className="text-xs text-indigo-100 leading-relaxed font-light">
+                  Membantu Rukun Tetangga dan Dinas Kependudukan serta Sosial Kota Tanjungbalai merekam profil kesejahteraan, kepemilikan aset, 
+                  riwayat gizi balita, pendidikan, serta ketenagakerjaan jiwa-jiwa di berbagai kelurahan.
+                </p>
+                <div className="flex flex-wrap gap-x-5 gap-y-1.5 pt-2 font-mono text-[10px] text-indigo-200">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                    Autosave Lokal
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                    Kalkulasi Umur Otomatis
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                    Live WebRTC snapshot
+                  </span>
+                </div>
+              </div>
+
+              {/* Interactive Toolbar Menu Navigation (Sidebar Menu) */}
+              <div className="relative z-10 shrink-0 space-y-2.5 w-full border-t border-b border-white/10 py-5 my-1 non-printable">
+                <p className="text-[10px] opacity-70 uppercase tracking-widest font-bold text-indigo-300 px-1 mb-1">
+                  Navigasi Fitur
+                </p>
+                
+                {/* Menu 1: Dashboard & Ringkasan Data */}
+                <button
+                  onClick={() => scrollToSection('database-section')}
+                  className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
+                    activeSection === 'database-section'
+                      ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
+                      : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <LayoutDashboard className="h-4 w-4 shrink-0" />
+                    <span>Dashboard &amp; Ringkasan</span>
+                  </div>
+                  <span className="text-[9px] px-2 py-0.5 rounded-md bg-indigo-950/50 text-indigo-300 border border-indigo-800/50">
+                    {surveys.length} KK
+                  </span>
+                </button>
+
+                {/* Menu 2: Manajemen Akun Petugas */}
+                <button
+                  onClick={() => {
+                    if (userRole === 'admin') {
+                      scrollToSection('user-approval-panel-section');
+                    } else {
+                      showToast('Akses Terbatas: Menu Manajemen Akun hanya untuk Administrator.', 'danger');
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
+                    userRole !== 'admin'
+                      ? 'opacity-65 bg-slate-900/40 text-slate-400 border-transparent cursor-not-allowed'
+                      : activeSection === 'user-approval-panel-section'
+                      ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
+                      : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <UserCheck className="h-4 w-4 shrink-0" />
+                    <span>Manajemen Akun Petugas</span>
+                  </div>
+                  {userRole !== 'admin' ? (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950/30 text-rose-300 border border-rose-900/40 font-mono">
+                      LOCK
+                    </span>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950/30 text-emerald-300 border border-emerald-900/40 font-mono">
+                      ADMIN
+                    </span>
+                  )}
+                </button>
+
+                {/* BAR TOOLBAR KHUSUS: PANTAU DATA MASUK (REAL-TIME) */}
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 my-2 space-y-2.5">
+                  <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                    <div className="flex items-center gap-1.5">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                      </span>
+                      <span className="text-[9px] font-extrabold text-indigo-200 tracking-wider uppercase">
+                        PANTAU DATA MASUK (REAL-TIME)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {/* Semua Data */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickFilter('all');
+                        setHasSearched(true);
+                        scrollToSection('database-section');
+                      }}
+                      className={`w-full flex items-center justify-between py-1.5 px-2.5 rounded-lg text-left transition-all text-[10.5px] font-bold cursor-pointer border ${
+                        quickFilter === 'all'
+                          ? 'bg-indigo-600/90 text-white border-indigo-500 shadow-xs'
+                          : 'bg-white/5 border-transparent text-indigo-200 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Database className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                        <span>Semua Data</span>
+                      </div>
+                      <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
+                        quickFilter === 'all' ? 'bg-indigo-800 text-white' : 'bg-white/15 text-indigo-200'
+                      }`}>
+                        {countAll}
+                      </span>
+                    </button>
+
+                    {/* Hari Ini */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickFilter('today');
+                        setHasSearched(true);
+                        scrollToSection('database-section');
+                      }}
+                      className={`w-full flex items-center justify-between py-1.5 px-2.5 rounded-lg text-left transition-all text-[10.5px] font-bold cursor-pointer border ${
+                        quickFilter === 'today'
+                          ? 'bg-amber-600/90 text-white border-amber-500 shadow-xs'
+                          : 'bg-white/5 border-transparent text-indigo-200 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <span>Hari Ini (Baru)</span>
+                      </div>
+                      <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
+                        quickFilter === 'today' ? 'bg-amber-800 text-white' : 'bg-white/15 text-indigo-200'
+                      }`}>
+                        {countToday}
+                      </span>
+                    </button>
+
+                    {/* Belum Sinkron */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickFilter('unsynced');
+                        setHasSearched(true);
+                        scrollToSection('database-section');
+                      }}
+                      className={`w-full flex items-center justify-between py-1.5 px-2.5 rounded-lg text-left transition-all text-[10.5px] font-bold cursor-pointer border ${
+                        quickFilter === 'unsynced'
+                          ? 'bg-rose-600/90 text-white border-rose-500 shadow-xs'
+                          : 'bg-white/5 border-transparent text-indigo-200 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <CloudOff className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                        <span>Belum Sinkron</span>
+                      </div>
+                      <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
+                        quickFilter === 'unsynced' ? 'bg-rose-800 text-white' : 'bg-white/15 text-indigo-200'
+                      }`}>
+                        {countUnsynced}
+                      </span>
+                    </button>
+
+                    {/* Data PMKS */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickFilter('pmks');
+                        setHasSearched(true);
+                        scrollToSection('database-section');
+                      }}
+                      className={`w-full flex items-center justify-between py-1.5 px-2.5 rounded-lg text-left transition-all text-[10.5px] font-bold cursor-pointer border ${
+                        quickFilter === 'pmks'
+                          ? 'bg-teal-600/90 text-white border-teal-500 shadow-xs'
+                          : 'bg-white/5 border-transparent text-indigo-200 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                        <span>Data PMKS</span>
+                      </div>
+                      <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
+                        quickFilter === 'pmks' ? 'bg-teal-800 text-white' : 'bg-white/15 text-indigo-200'
+                      }`}>
+                        {countPmks}
+                      </span>
+                    </button>
+
+                    {/* Usulan Baru */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickFilter('priority');
+                        setHasSearched(true);
+                        scrollToSection('database-section');
+                      }}
+                      className={`w-full flex items-center justify-between py-1.5 px-2.5 rounded-lg text-left transition-all text-[10.5px] font-bold cursor-pointer border ${
+                        quickFilter === 'priority'
+                          ? 'bg-purple-600/90 text-white border-purple-500 shadow-xs'
+                          : 'bg-white/5 border-transparent text-indigo-200 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <BookmarkCheck className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                        <span>Usulan Baru</span>
+                      </div>
+                      <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
+                        quickFilter === 'priority' ? 'bg-purple-800 text-white' : 'bg-white/15 text-indigo-200'
+                      }`}>
+                        {countPriority}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Menu 3: Formulir Pengisian Data (Multi-Tahap) */}
+                <button
+                  onClick={() => scrollToSection('wizard-form-section')}
+                  className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
+                    activeSection === 'wizard-form-section'
+                      ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
+                      : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FileText className="h-4 w-4 shrink-0" />
+                    <span>Formulir Pengisian Data</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-950/50 text-indigo-300 border border-indigo-800/50">
+                    Sensus
+                  </span>
+                </button>
+
+                {/* Menu 4: Peta Sosio-Geografis */}
+                <button
+                  onClick={() => scrollToSection('spatial-map-section')}
+                  className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
+                    activeSection === 'spatial-map-section'
+                      ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
+                      : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Map className="h-4 w-4 shrink-0" />
+                    <span>Peta Sosio-Geografis</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-950/50 text-teal-300 border border-teal-800/50">
+                    GPS Map
+                  </span>
+                </button>
+
+                {/* Menu 5: Urungkan Aksi Terakhir (Undo Button) */}
+                <button
+                  type="button"
+                  onClick={triggerUndo}
+                  disabled={!lastAction}
+                  className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all select-none border text-xs font-bold ${
+                    lastAction
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99]'
+                      : 'bg-white/5 text-slate-500 border-transparent cursor-not-allowed opacity-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <RefreshCw className={`h-4 w-4 shrink-0 ${lastAction ? 'animate-spin-slow' : ''}`} />
+                    <span>Urungkan Aksi Terakhir</span>
+                  </div>
+                  {lastAction ? (
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-600 text-white animate-pulse">
+                      READY
+                    </span>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-600">
+                      KOSONG
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Backup & Restore Local JSON Card */}
+              <div className="relative z-10 shrink-0 bg-white/10 backdrop-blur-xs p-5 rounded-2xl border border-white/15 space-y-4 w-full non-printable">
+                <div className="space-y-1">
+                  <p className="text-[10px] opacity-70 uppercase tracking-widest font-extrabold text-amber-300">
+                    Cadangan &amp; Pemulihan
+                  </p>
+                  <div className="text-[10.5px] text-indigo-200 leading-relaxed">
+                    Simpan seluruh data sensus dan profil akun lokal Anda secara mandiri untuk mencegah kehilangan data jika peramban dibersihkan.
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleExportData}
+                    className="flex-1 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white font-bold text-[10.5px] uppercase cursor-pointer select-none border border-white/10 transition-all flex items-center justify-center gap-1.5 shadow-xs active:scale-[0.98]"
+                  >
+                    <Download className="h-3.5 w-3.5 text-indigo-300" />
+                    Ekspor
+                  </button>
+                  
+                  <label className="flex-1 py-2 px-3 rounded-xl bg-indigo-600/80 hover:bg-indigo-500 text-white font-bold text-[10.5px] uppercase cursor-pointer select-none border border-indigo-500 text-center transition-all flex items-center justify-center gap-1.5 shadow-xs active:scale-[0.98]">
+                    <Upload className="h-3.5 w-3.5" />
+                    Impor
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportData}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* User information & Logout actions */}
+              <div className="relative z-10 shrink-0 bg-white/10 backdrop-blur-xs p-5 rounded-2xl border border-white/15 space-y-4 w-full">
+                <div className="space-y-1">
+                  <p className="text-[10px] opacity-70 uppercase tracking-wider font-semibold text-indigo-300">Sesi Aktif</p>
+                  <div className="text-xs font-bold flex items-center gap-2 text-indigo-100">
+                    <span className={`inline-block h-2.5 w-2.5 rounded-full animate-pulse ${userRole === 'admin' ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
+                    <span>{userRole === 'admin' ? 'Administrator (Full Access)' : 'Petugas Pendata (Akses Lapangan)'}</span>
+                  </div>
+                </div>
+                
+                {userRole === 'pendata' && (
+                  <div className="text-[10px] text-indigo-200 leading-relaxed bg-black/20 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <p className="font-bold text-emerald-300 flex items-center gap-1">
+                      <ShieldAlert className="h-3.5 w-3.5 text-emerald-400" />
+                      Keamanan Data Aktif:
+                    </p>
+                    <p>Database histori aktif untuk pemantauan, pengeditan, serta alat penghapusan &amp; pengosongan data secara penuh.</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-2.5 px-4 rounded-xl bg-indigo-950/40 hover:bg-rose-900/80 text-indigo-200 hover:text-white font-bold text-[10.5px] uppercase cursor-pointer select-none border border-white/10 hover:border-rose-800 transition-all flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Keluar Sesi
+                </button>
+              </div>
             </div>
-          )}
+          </aside>
 
-          <SurveyWizardForm 
-            initialData={editingSurvey} 
-            onSubmit={handleSurveySubmit} 
-            onCancel={editingSurvey ? () => setEditingSurvey(null) : undefined}
-            username={username}
-          />
-        </section>
+          {/* Right Main Content Area */}
+          <div className="lg:col-span-8 space-y-8">
+            
+            {/* Barisan Info Card (Metrics) */}
+            <div className="non-printable">
+              <MetricsGrid surveys={surveys} />
+            </div>
 
-        {/* Data summary table database */}
-        <section id="database-section" className="pt-2 space-y-4">
-          <QuickStats surveys={surveys} />
-          <DataSummaryTable 
-            surveys={surveys}
-            onView={setSelectedSurvey}
-            onEdit={handleEditTrigger}
-            onDelete={handleDeleteSurvey}
-            onPrint={handlePrint}
-            onLoadSeeds={handleLoadSeedData}
-            onClearAll={handleClearAll}
-            userRole={userRole}
-            syncUrl={syncUrl}
-            setSyncUrl={updateSyncUrl}
-            isAutoSync={isAutoSync}
-            setIsAutoSync={updateAutoSync}
-            onSyncSurvey={handleSyncSurvey}
-            onSyncAll={handleSyncAll}
-            onPullCloudData={handlePullCloudData}
-            isPullingCloud={isPullingCloud}
-          />
-        </section>
+            {/* Admin User Approval Management Panel */}
+            {userRole === 'admin' && (
+              <section id="user-approval-panel-section" className="space-y-4">
+                <AdminUserApprovalPanel onShowToast={showToast} currentUser={username} />
+              </section>
+            )}
 
-        {/* Visualisasi data Recharts sebaran KK per kelurahan */}
-        <section id="chart-section" className="pt-2">
-          <VillageDataChart surveys={surveys} />
-        </section>
+            {/* Wizard Form Section */}
+            <section id="wizard-form-section" className="space-y-4">
+              {editingSurvey && (
+                <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl flex items-center justify-between text-xs font-semibold">
+                  <span className="flex items-center gap-2">
+                    <Edit3 className="h-4 w-4 text-blue-600 animate-pulse" />
+                    <span>Sedang Memodifikasi DTSEN untuk No KK: <b>{editingSurvey.noKK}</b> (Responden: {editingSurvey.namaResponden})</span>
+                  </span>
+                  <button 
+                    onClick={() => {
+                      setEditingSurvey(null);
+                      showToast('Modifikasi sensor dibatalkan, mengembalikan ke forms baru.', 'info');
+                    }} 
+                    className="text-[11px] bg-white border text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-50 cursor-pointer"
+                  >
+                    Batal Edit
+                  </button>
+                </div>
+              )}
 
-        {/* Peta Sebaran Georujukan Spasial Koordinat GPS Sensus */}
-        <section id="spatial-map-section" className="pt-4 non-printable">
-          <GPSDistributionMap 
-            surveys={surveys}
-            onViewSurvey={setSelectedSurvey}
-          />
-        </section>
+              <SurveyWizardForm 
+                initialData={editingSurvey} 
+                onSubmit={handleSurveySubmit} 
+                onCancel={editingSurvey ? () => setEditingSurvey(null) : undefined}
+                username={username}
+              />
+            </section>
 
+            {/* Data summary table database */}
+            <section id="database-section" className="space-y-4">
+              <QuickStats surveys={surveys} />
+              <DataSummaryTable 
+                surveys={surveys}
+                onView={setSelectedSurvey}
+                onEdit={handleEditTrigger}
+                onDelete={handleDeleteSurvey}
+                onPrint={handlePrint}
+                onLoadSeeds={handleLoadSeedData}
+                onClearAll={handleClearAll}
+                userRole={userRole}
+                syncUrl={syncUrl}
+                setSyncUrl={updateSyncUrl}
+                isAutoSync={isAutoSync}
+                setIsAutoSync={updateAutoSync}
+                onSyncSurvey={handleSyncSurvey}
+                onSyncAll={handleSyncAll}
+                onPullCloudData={handlePullCloudData}
+                isPullingCloud={isPullingCloud}
+                quickFilter={quickFilter}
+                setQuickFilter={setQuickFilter}
+                hasSearched={hasSearched}
+                setHasSearched={setHasSearched}
+              />
+            </section>
+
+            {/* Visualisasi data Recharts sebaran KK per kelurahan */}
+            <section id="chart-section" className="pt-2">
+              <VillageDataChart surveys={surveys} />
+            </section>
+
+            {/* Peta Sebaran Georujukan Spasial Koordinat GPS Sensus */}
+            <section id="spatial-map-section" className="pt-4 non-printable">
+              <GPSDistributionMap 
+                surveys={surveys}
+                onViewSurvey={setSelectedSurvey}
+              />
+            </section>
+
+          </div>
+
+        </div>
       </main>
 
       {/* App Footer */}
