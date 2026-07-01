@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Calendar, 
   Printer, 
@@ -38,6 +38,9 @@ export default function MonthlyReportPanel({ surveys, onViewSurvey, userRole }: 
     const y = params.get('year');
     return y ? Number(y) : 2026; // 2026 default
   });
+
+  const [autoPrintOnSelect, setAutoPrintOnSelect] = useState<boolean>(false);
+  const isFirstRender = useRef<boolean>(true);
 
   const [showIframePrintAlert, setShowIframePrintAlert] = useState(false);
 
@@ -227,6 +230,20 @@ export default function MonthlyReportPanel({ surveys, onViewSurvey, userRole }: 
     }
   };
 
+  // Automatically trigger printing when selecting a new month or year if auto-print is enabled
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (autoPrintOnSelect) {
+      const timer = setTimeout(() => {
+        handlePrintReport();
+      }, 500); // 500ms delay to let calculations and tables update and render fully
+      return () => clearTimeout(timer);
+    }
+  }, [selectedMonth, selectedYear, autoPrintOnSelect]);
+
   // Export monthly aggregates & lists to a downloadable CSV
   const handleExportCSV = () => {
     if (monthlySurveys.length === 0) {
@@ -320,6 +337,20 @@ export default function MonthlyReportPanel({ surveys, onViewSurvey, userRole }: 
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
+
+          <button
+            type="button"
+            id="btn-toggle-auto-print"
+            onClick={() => setAutoPrintOnSelect(!autoPrintOnSelect)}
+            className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer border ${
+              autoPrintOnSelect
+                ? 'bg-amber-500/10 border-amber-300 text-amber-800 hover:bg-amber-500/20'
+                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <span className={`h-2 w-2 rounded-full ${autoPrintOnSelect ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
+            Cetak Otomatis: <span className={autoPrintOnSelect ? 'text-amber-600 font-extrabold' : 'text-slate-400 font-normal'}>{autoPrintOnSelect ? 'AKTIF' : 'NON-AKTIF'}</span>
+          </button>
 
           <button
             type="button"
