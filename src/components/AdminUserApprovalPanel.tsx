@@ -55,11 +55,15 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
 
   const [userToDelete, setUserToDelete] = useState<{ username: string; fullname: string } | null>(null);
 
-  const handleDeleteTrigger = (username: string, name: string) => {
+  const handleDeleteTrigger = (username: string, name: string, role?: string) => {
     const safeUsername = username || '';
     const safeCurrentUser = currentUser || '';
-    if (safeUsername.toLowerCase() === safeCurrentUser.toLowerCase() || safeUsername.toLowerCase() === 'slrttanjungbalai') {
+    if (safeUsername.toLowerCase() === safeCurrentUser.toLowerCase()) {
       onShowToast('Aksi Ditolak: Anda tidak dapat menghapus akun Anda sendiri!', 'danger');
+      return;
+    }
+    if (safeUsername.toLowerCase() === 'slrttanjungbalai' && role === 'admin') {
+      onShowToast('Aksi Ditolak: Anda tidak dapat menghapus Akun Administrator Utama!', 'danger');
       return;
     }
     setUserToDelete({ username: safeUsername, fullname: name });
@@ -190,7 +194,7 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                 {filteredUsers.map((user, idx) => {
-                  const isMainAdmin = user.username?.toLowerCase() === 'slrttanjungbalai';
+                  const isMainAdmin = user.username?.toLowerCase() === 'slrttanjungbalai' && user.role === 'admin';
                   const isUserActive = !!user.isApproved;
                   
                   return (
@@ -270,7 +274,7 @@ export default function AdminUserApprovalPanel({ onShowToast, currentUser }: Adm
                           {!isMainAdmin && (
                             <button
                               type="button"
-                              onClick={() => handleDeleteTrigger(user.username, user.fullname || user.username)}
+                              onClick={() => handleDeleteTrigger(user.username, user.fullname || user.username, user.role)}
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-lg cursor-pointer"
                               title="Tolak dan Hapus Akun"
                             >

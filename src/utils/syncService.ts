@@ -670,11 +670,13 @@ export async function saveUserToFirestore(username: string, userData: any): Prom
   const safeUsername = (username || '').toLowerCase().trim();
   if (!safeUsername) return false;
 
+  const dataWithUsername = { ...userData, username: userData.username || safeUsername };
+
   // Always cache/save to local storage offline users
   try {
     const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
     const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-    offlineUsers[safeUsername] = { ...offlineUsers[safeUsername], ...userData };
+    offlineUsers[safeUsername] = { ...offlineUsers[safeUsername], ...dataWithUsername };
     localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
   } catch (e) {
     console.warn("Error caching user offline:", e);
@@ -685,7 +687,7 @@ export async function saveUserToFirestore(username: string, userData: any): Prom
   }
   try {
     await ensureAuthenticated();
-    await setDoc(doc(db, 'users', safeUsername), userData, { merge: true });
+    await setDoc(doc(db, 'users', safeUsername), dataWithUsername, { merge: true });
     return true;
   } catch (error) {
     console.error("Error saving user to Firestore: ", error);
@@ -702,14 +704,20 @@ export async function fetchAllUsersFromFirestore(): Promise<any[]> {
   if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
     const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
     const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-    return Object.values(offlineUsers);
+    return Object.entries(offlineUsers).map(([key, value]: [string, any]) => {
+      return { ...value, username: value.username || key };
+    });
   }
   try {
     await ensureAuthenticated();
     const querySnapshot = await getDocs(collection(db, 'users'));
     const list: any[] = [];
     querySnapshot.forEach((docSnap) => {
-      list.push(docSnap.data());
+      const data = docSnap.data();
+      list.push({
+        ...data,
+        username: data.username || docSnap.id
+      });
     });
     return list;
   } catch (error) {
@@ -717,7 +725,9 @@ export async function fetchAllUsersFromFirestore(): Promise<any[]> {
     checkIfQuotaError(error);
     const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
     const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-    return Object.values(offlineUsers);
+    return Object.entries(offlineUsers).map(([key, value]: [string, any]) => {
+      return { ...value, username: value.username || key };
+    });
   }
 }
 

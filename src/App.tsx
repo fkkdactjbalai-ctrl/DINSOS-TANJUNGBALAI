@@ -52,12 +52,34 @@ export default function App() {
   const [autoPrintActive, setAutoPrintActive] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'danger' } | null>(null);
   const [isPullingCloud, setIsPullingCloud] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>('database-section');
+  const [activeView, setActiveView] = useState<'dashboard' | 'manajemen_petugas' | 'formulir' | 'peta_spasial' | 'laporan_bulanan'>('dashboard');
+
+  const activeSection = 
+    activeView === 'dashboard' ? 'database-section' :
+    activeView === 'manajemen_petugas' ? 'user-approval-panel-section' :
+    activeView === 'formulir' ? 'wizard-form-section' :
+    activeView === 'peta_spasial' ? 'spatial-map-section' :
+    'monthly-report-section';
+
   const [quickFilter, setQuickFilter] = useState<'all' | 'today' | 'unsynced' | 'pmks' | 'priority'>('all');
   const [hasSearched, setHasSearched] = useState(false);
   const [lastAction, setLastAction] = useState<UndoAction | null>(null);
   const [isUndoToastVisible, setIsUndoToastVisible] = useState(false);
   const [quotaExceeded, setQuotaExceeded] = useState(isFirestoreQuotaExceeded());
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  useEffect(() => {
+    const handleBeforePrint = () => setIsPrinting(true);
+    const handleAfterPrint = () => setIsPrinting(false);
+
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
 
   useEffect(() => {
     registerQuotaExceededCallback((val) => {
@@ -73,43 +95,17 @@ export default function App() {
   const countPmks = surveys.filter(s => (s.anggotaKeluarga || []).some(m => m.isPmks === 'Ya')).length;
   const countPriority = surveys.filter(s => s.statusPendataan === 'Usulan Baru').length;
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const sections = ['database-section', 'wizard-form-section', 'spatial-map-section', 'monthly-report-section'];
-      if (userRole === 'admin') {
-        sections.push('user-approval-panel-section');
-      }
-      
-      let currentSection = 'database-section';
-      let minDistance = Infinity;
-      
-      sections.forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          const distance = Math.abs(rect.top - 120);
-          if (distance < minDistance) {
-            minDistance = distance;
-            currentSection = id;
-          }
-        }
-      });
-      
-      setActiveSection(currentSection);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [userRole]);
-
   const scrollToSection = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      const yOffset = -100;
-      const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-      setActiveSection(id);
+    if (id === 'database-section') {
+      setActiveView('dashboard');
+    } else if (id === 'user-approval-panel-section') {
+      setActiveView('manajemen_petugas');
+    } else if (id === 'wizard-form-section') {
+      setActiveView('formulir');
+    } else if (id === 'spatial-map-section') {
+      setActiveView('peta_spasial');
+    } else if (id === 'monthly-report-section') {
+      setActiveView('laporan_bulanan');
     }
   };
 
@@ -470,11 +466,8 @@ export default function App() {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     } else if (action === 'print-report') {
-      // Scroll to the monthly report section
-      const element = document.getElementById('monthly-report-section');
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-      }
+      // Switch view to the monthly report section
+      setActiveView('laporan_bulanan');
       
       // Delay to let the charts & tables render and compute chosen stats
       const timer = setTimeout(() => {
@@ -578,6 +571,7 @@ export default function App() {
     }
 
     saveToLocalStorage(updatedSurveys);
+    setSurveys(updatedSurveys);
 
     // Store for Undo
     setLastAction({
@@ -587,35 +581,34 @@ export default function App() {
     });
     setIsUndoToastVisible(true);
 
-    // Write directly to Firestore if online
-    if (isFirebaseConfigured) {
-      sendSurveyToGoogleAppsScript(syncUrl, finalSurveyToSync).then(res => {
-        if (res.success) {
-          setSurveys(prev => {
-            const updated = prev.map(item => {
-              if (item.id === targetSurveyId) {
-                return { ...item, synced: true, syncedAt: new Date().toISOString() };
-              }
-              return item;
-            });
-            localStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
-            return updated;
+    // Write directly to Firestore or Sheets if online/configured
+    sendSurveyToGoogleAppsScript(syncUrl, finalSurveyToSync).then(res => {
+      if (res.success) {
+        setSurveys(prev => {
+          const updated = prev.map(item => {
+            if (item.id === targetSurveyId) {
+              return { ...item, synced: true, syncedAt: new Date().toISOString() };
+            }
+            return item;
           });
+          localStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
+          return updated;
+        });
+        if (isFirebaseConfigured) {
           showToast(`Sinkronisasi cloud otomatis sukses untuk No KK ${finalSurveyToSync.noKK}!`, 'success');
-        } else {
-          showToast(`Tersimpan lokal. Antrean sinkronisasi cloud: ${formatErrorMessage(res.message)}`, 'info');
+        } else if (syncUrl && syncUrl.trim().startsWith('http')) {
+          showToast(`Berhasil tersinkronisasi ke Google Sheets untuk No KK ${finalSurveyToSync.noKK}!`, 'success');
         }
-      }).catch(err => {
-        console.warn('Direct cloud sync failed on submission:', err);
-      });
-    }
-
-    // Scroll smoothly to the summary database table for verification
-    setTimeout(() => {
-      const dbElement = document.getElementById('database-section');
-      if (dbElement) {
-        dbElement.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        showToast(`Tersimpan lokal. Antrean sinkronisasi cloud: ${formatErrorMessage(res.message)}`, 'info');
       }
+    }).catch(err => {
+      console.warn('Direct cloud/Sheets sync failed on submission:', err);
+    });
+
+    // Switch view to dashboard for verification
+    setTimeout(() => {
+      setActiveView('dashboard');
     }, 400);
   };
 
@@ -773,13 +766,8 @@ export default function App() {
   // Trigger editing state and load data into form
   const handleEditTrigger = (survey: SurveyData) => {
     setEditingSurvey(survey);
-    showToast(`Formulir di atas telah memuat data KK: ${survey.noKK}. Silakan lakukan penyesuaian.`, 'info');
-    
-    // Scroll cleanly up to the form wizard
-    const formElement = document.getElementById('wizard-form-section');
-    if (formElement) {
-      formElement.scrollIntoView({ behavior: 'smooth' });
-    }
+    showToast(`Formulir telah memuat data KK: ${survey.noKK}. Silakan lakukan penyesuaian.`, 'info');
+    setActiveView('formulir');
   };
 
   // Delete a survey from history
@@ -981,9 +969,9 @@ export default function App() {
                 
                 {/* Menu 1: Dashboard & Ringkasan Data */}
                 <button
-                  onClick={() => scrollToSection('database-section')}
+                  onClick={() => setActiveView('dashboard')}
                   className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
-                    activeSection === 'database-section'
+                    activeView === 'dashboard'
                       ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
                       : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
                   }`}
@@ -1001,7 +989,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     if (userRole === 'admin') {
-                      scrollToSection('user-approval-panel-section');
+                      setActiveView('manajemen_petugas');
                     } else {
                       showToast('Akses Terbatas: Menu Manajemen Akun hanya untuk Administrator.', 'danger');
                     }
@@ -1009,7 +997,7 @@ export default function App() {
                   className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
                     userRole !== 'admin'
                       ? 'opacity-65 bg-slate-900/40 text-slate-400 border-transparent cursor-not-allowed'
-                      : activeSection === 'user-approval-panel-section'
+                      : activeView === 'manajemen_petugas'
                       ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
                       : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
                   }`}
@@ -1173,9 +1161,9 @@ export default function App() {
 
                 {/* Menu 3: Formulir Pengisian Data (Multi-Tahap) */}
                 <button
-                  onClick={() => scrollToSection('wizard-form-section')}
+                  onClick={() => setActiveView('formulir')}
                   className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
-                    activeSection === 'wizard-form-section'
+                    activeView === 'formulir'
                       ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
                       : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
                   }`}
@@ -1191,9 +1179,9 @@ export default function App() {
 
                 {/* Menu 4: Peta Sosio-Geografis */}
                 <button
-                  onClick={() => scrollToSection('spatial-map-section')}
+                  onClick={() => setActiveView('peta_spasial')}
                   className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
-                    activeSection === 'spatial-map-section'
+                    activeView === 'peta_spasial'
                       ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
                       : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
                   }`}
@@ -1209,9 +1197,9 @@ export default function App() {
 
                 {/* Menu 5: Format Laporan Bulanan */}
                 <button
-                  onClick={() => scrollToSection('monthly-report-section')}
+                  onClick={() => setActiveView('laporan_bulanan')}
                   className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-xl text-left transition-all cursor-pointer select-none border text-xs font-semibold ${
-                    activeSection === 'monthly-report-section'
+                    activeView === 'laporan_bulanan'
                       ? 'bg-indigo-600/80 text-white border-indigo-500 shadow-xs'
                       : 'bg-white/5 hover:bg-white/10 text-indigo-200 hover:text-white border-transparent'
                   }`}
@@ -1320,95 +1308,106 @@ export default function App() {
           {/* Right Main Content Area */}
           <div className="lg:col-span-8 space-y-8">
             
-            {/* Barisan Info Card (Metrics) */}
-            <div className="non-printable">
-              <MetricsGrid surveys={surveys} />
-            </div>
+            {/* Dashboard View */}
+            {(activeView === 'dashboard' || isPrinting) && (
+              <div className="space-y-8 animate-fade-in">
+                {/* Barisan Info Card (Metrics) */}
+                <div className="non-printable">
+                  <MetricsGrid surveys={surveys} />
+                </div>
+
+                {/* Data summary table database */}
+                <section id="database-section" className="space-y-4">
+                  <QuickStats surveys={surveys} />
+                  <DataSummaryTable 
+                    surveys={surveys}
+                    onView={setSelectedSurvey}
+                    onEdit={handleEditTrigger}
+                    onDelete={handleDeleteSurvey}
+                    onPrint={handlePrint}
+                    onLoadSeeds={handleLoadSeedData}
+                    onClearAll={handleClearAll}
+                    userRole={userRole}
+                    syncUrl={syncUrl}
+                    setSyncUrl={updateSyncUrl}
+                    isAutoSync={isAutoSync}
+                    setIsAutoSync={updateAutoSync}
+                    onSyncSurvey={handleSyncSurvey}
+                    onSyncAll={handleSyncAll}
+                    onPullCloudData={handlePullCloudData}
+                    isPullingCloud={isPullingCloud}
+                    quickFilter={quickFilter}
+                    setQuickFilter={setQuickFilter}
+                    hasSearched={hasSearched}
+                    setHasSearched={setHasSearched}
+                  />
+                </section>
+
+                {/* Visualisasi data Recharts sebaran KK per kelurahan */}
+                <section id="chart-section" className="pt-2">
+                  <VillageDataChart surveys={surveys} />
+                </section>
+              </div>
+            )}
 
             {/* Admin User Approval Management Panel */}
-            {userRole === 'admin' && (
-              <section id="user-approval-panel-section" className="space-y-6">
+            {userRole === 'admin' && (activeView === 'manajemen_petugas' || isPrinting) && (
+              <section id="user-approval-panel-section" className="space-y-6 animate-fade-in">
                 <AdminUserApprovalPanel onShowToast={showToast} currentUser={username} />
                 <CloudCleanupPanel onShowToast={showToast} />
               </section>
             )}
 
             {/* Wizard Form Section */}
-            <section id="wizard-form-section" className="space-y-4">
-              {editingSurvey && (
-                <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl flex items-center justify-between text-xs font-semibold">
-                  <span className="flex items-center gap-2">
-                    <Edit3 className="h-4 w-4 text-blue-600 animate-pulse" />
-                    <span>Sedang Memodifikasi DTSEN untuk No KK: <b>{editingSurvey.noKK}</b> (Responden: {editingSurvey.namaResponden})</span>
-                  </span>
-                  <button 
-                    onClick={() => {
-                      setEditingSurvey(null);
-                      showToast('Modifikasi sensor dibatalkan, mengembalikan ke forms baru.', 'info');
-                    }} 
-                    className="text-[11px] bg-white border text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-50 cursor-pointer"
-                  >
-                    Batal Edit
-                  </button>
-                </div>
-              )}
+            {(activeView === 'formulir' || isPrinting) && (
+              <section id="wizard-form-section" className="space-y-4 animate-fade-in">
+                {editingSurvey && (
+                  <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl flex items-center justify-between text-xs font-semibold">
+                    <span className="flex items-center gap-2">
+                      <Edit3 className="h-4 w-4 text-blue-600 animate-pulse" />
+                      <span>Sedang Memodifikasi DTSEN untuk No KK: <b>{editingSurvey.noKK}</b> (Responden: {editingSurvey.namaResponden})</span>
+                    </span>
+                    <button 
+                      onClick={() => {
+                        setEditingSurvey(null);
+                        showToast('Modifikasi sensor dibatalkan, mengembalikan ke forms baru.', 'info');
+                      }} 
+                      className="text-[11px] bg-white border text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-50 cursor-pointer"
+                    >
+                      Batal Edit
+                    </button>
+                  </div>
+                )}
 
-              <SurveyWizardForm 
-                initialData={editingSurvey} 
-                onSubmit={handleSurveySubmit} 
-                onCancel={editingSurvey ? () => setEditingSurvey(null) : undefined}
-                username={username}
-              />
-            </section>
-
-            {/* Data summary table database */}
-            <section id="database-section" className="space-y-4">
-              <QuickStats surveys={surveys} />
-              <DataSummaryTable 
-                surveys={surveys}
-                onView={setSelectedSurvey}
-                onEdit={handleEditTrigger}
-                onDelete={handleDeleteSurvey}
-                onPrint={handlePrint}
-                onLoadSeeds={handleLoadSeedData}
-                onClearAll={handleClearAll}
-                userRole={userRole}
-                syncUrl={syncUrl}
-                setSyncUrl={updateSyncUrl}
-                isAutoSync={isAutoSync}
-                setIsAutoSync={updateAutoSync}
-                onSyncSurvey={handleSyncSurvey}
-                onSyncAll={handleSyncAll}
-                onPullCloudData={handlePullCloudData}
-                isPullingCloud={isPullingCloud}
-                quickFilter={quickFilter}
-                setQuickFilter={setQuickFilter}
-                hasSearched={hasSearched}
-                setHasSearched={setHasSearched}
-              />
-            </section>
-
-            {/* Visualisasi data Recharts sebaran KK per kelurahan */}
-            <section id="chart-section" className="pt-2">
-              <VillageDataChart surveys={surveys} />
-            </section>
+                <SurveyWizardForm 
+                  initialData={editingSurvey} 
+                  onSubmit={handleSurveySubmit} 
+                  onCancel={editingSurvey ? () => setEditingSurvey(null) : undefined}
+                  username={username}
+                />
+              </section>
+            )}
 
             {/* Peta Sebaran Georujukan Spasial Koordinat GPS Sensus */}
-            <section id="spatial-map-section" className="pt-4 non-printable">
-              <GPSDistributionMap 
-                surveys={surveys}
-                onViewSurvey={setSelectedSurvey}
-              />
-            </section>
+            {(activeView === 'peta_spasial' || isPrinting) && (
+              <section id="spatial-map-section" className="pt-4 non-printable animate-fade-in">
+                <GPSDistributionMap 
+                  surveys={surveys}
+                  onViewSurvey={setSelectedSurvey}
+                />
+              </section>
+            )}
 
             {/* Format Laporan Bulanan Sensus Keluarga */}
-            <section id="monthly-report-section" className="pt-4">
-              <MonthlyReportPanel 
-                surveys={surveys}
-                onViewSurvey={setSelectedSurvey}
-                userRole={userRole}
-              />
-            </section>
+            {(activeView === 'laporan_bulanan' || isPrinting) && (
+              <section id="monthly-report-section" className="pt-4 animate-fade-in">
+                <MonthlyReportPanel 
+                  surveys={surveys}
+                  onViewSurvey={setSelectedSurvey}
+                  userRole={userRole}
+                />
+              </section>
+            )}
 
           </div>
 

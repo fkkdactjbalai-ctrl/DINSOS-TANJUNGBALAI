@@ -55,22 +55,28 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           created_at: new Date().toISOString()
         };
 
-        // Always save to offline local storage to ensure instant offline access
+        // Always save to offline local storage to ensure instant offline access if not seeded
         try {
-          const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
-          const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-          let changed = false;
-          
-          if (!offlineUsers['slrttanjungbalai']) {
-            offlineUsers['slrttanjungbalai'] = seedAdmin;
-            changed = true;
-          }
-          if (!offlineUsers['fasilitator slrt']) {
-            offlineUsers['fasilitator slrt'] = seedFasilitator;
-            changed = true;
-          }
-          if (changed) {
-            localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+          const offlineSeededKey = `dtsen_offline_seeded_${firebaseConfig.projectId || 'default'}`;
+          const isOfflineSeeded = localStorage.getItem(offlineSeededKey) === 'true';
+
+          if (!isOfflineSeeded) {
+            const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+            const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+            let changed = false;
+            
+            if (!offlineUsers['slrttanjungbalai']) {
+              offlineUsers['slrttanjungbalai'] = seedAdmin;
+              changed = true;
+            }
+            if (!offlineUsers['fasilitator slrt']) {
+              offlineUsers['fasilitator slrt'] = seedFasilitator;
+              changed = true;
+            }
+            if (changed) {
+              localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+            }
+            localStorage.setItem(offlineSeededKey, 'true');
           }
         } catch (e) {
           console.warn("Offline local seeding warning:", e);
