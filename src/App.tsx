@@ -171,7 +171,7 @@ export default function App() {
     setIsAutoSync(enabled);
   };
 
-  // Load from local storage on mount and configure real-time active listener sync across devices
+  // Load from local storage on mount
   useEffect(() => {
     const saved = localStorage.getItem('sensus_surveys_v2');
     if (saved) {
@@ -184,9 +184,14 @@ export default function App() {
       // Pre-fill with empty array initially
       setSurveys([]);
     }
+  }, []);
+
+  // Configure real-time active listener sync across devices
+  useEffect(() => {
+    if (!userRole) return;
 
     // Subscribe to Firestore changes to synchronize in real-time across devices
-    const unsubscribe = subscribeToSurveys((cloudSurveys) => {
+    const unsubscribe = subscribeToSurveys(userRole, fullname, (cloudSurveys) => {
       setSurveys(prev => {
         const mergedDict: { [id: string]: SurveyData } = {};
         
@@ -211,7 +216,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [userRole, fullname]);
 
   // Format obscure Firestore error messages into clean, user-friendly language
   const formatErrorMessage = (message: string): string => {
@@ -690,7 +695,7 @@ export default function App() {
     const syncStartTime = new Date().toISOString();
     
     try {
-      const res = await fetchSurveysFromGoogleAppsScript(syncUrl, lastSync);
+      const res = await fetchSurveysFromGoogleAppsScript(syncUrl, lastSync, userRole, fullname);
       if (res.success && res.surveys) {
         const cloudSurveys = res.surveys;
         
@@ -821,7 +826,7 @@ export default function App() {
     const previous = [...surveys];
     saveToLocalStorage([]);
     setEditingSurvey(null);
-    clearAllSurveysFromFirestore();
+    clearAllSurveysFromFirestore(userRole, fullname);
 
     // Store for Undo
     setLastAction({

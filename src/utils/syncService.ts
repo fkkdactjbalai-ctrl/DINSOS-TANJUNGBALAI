@@ -407,7 +407,9 @@ export async function sendSurveyToGoogleAppsScript(
  */
 export async function fetchSurveysFromGoogleAppsScript(
   url: string,
-  sinceTimestamp?: string
+  sinceTimestamp?: string,
+  role?: 'admin' | 'pendata' | null,
+  fullname?: string
 ): Promise<{ success: boolean; surveys?: SurveyData[]; isDelta?: boolean; message: string }> {
   if (!isFirebaseConfigured || !db) {
     return {
@@ -430,15 +432,13 @@ export async function fetchSurveysFromGoogleAppsScript(
     let surveysQuery;
     let isDelta = false;
 
-    if (sinceTimestamp) {
-      // Delta sync: fetch only documents synced or modified after the sinceTimestamp
+    // Optimize: If user is "pendata", only query their own surveys to massively save reads!
+    if (role === 'pendata' && fullname) {
       surveysQuery = query(
         collection(db, 'surveys'),
-        where('syncedAt', '>', sinceTimestamp)
+        where('namaPendata', '==', fullname)
       );
-      isDelta = true;
     } else {
-      // Full sync: fetch everything
       surveysQuery = collection(db, 'surveys');
     }
 
@@ -447,9 +447,18 @@ export async function fetchSurveysFromGoogleAppsScript(
     querySnapshot.forEach((doc) => {
       // Safely filter out the '_setup_metadata' control document
       if (doc.id !== '_setup_metadata') {
-        surveysCol.push(doc.data() as SurveyData);
+        const docData = doc.data() as SurveyData;
+        // In-memory Delta filtering to avoid composite indexes requirement
+        if (sinceTimestamp && docData.syncedAt && docData.syncedAt <= sinceTimestamp) {
+          return;
+        }
+        surveysCol.push(docData);
       }
     });
+
+    if (sinceTimestamp) {
+      isDelta = true;
+    }
 
     const msg = isDelta
       ? `Berhasil memperbarui ${surveysCol.length} perubahan data sensus baru/terkini (Delta Sync) dari Firestore Cloud!`
@@ -481,8 +490,12 @@ export async function fetchSurveysFromGoogleAppsScript(
  * Registers a real-time event listener for 'surveys' to support multi-device real-time sync.
  * Ensures metadata control documents are filtered out, maintaining clean application state.
  */
-export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): () => void {
-  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+export function subscribeToSurveys(
+  role: 'admin' | 'pendata' | null,
+  fullname: string,
+  onUpdate: (surveys: SurveyData[]) => void
+): () => void {
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded || !role) {
     console.info("Firebase Firestore is currently unconfigured, in offline mode, or quota is exceeded. Real-time active listener deferred.");
     return () => {};
   }
@@ -492,7 +505,19 @@ export function subscribeToSurveys(onUpdate: (surveys: SurveyData[]) => void): (
 
   ensureAuthenticated().then(() => {
     if (isUnsubscribed) return;
-    unsub = onSnapshot(collection(db, 'surveys'), (snapshot) => {
+
+    // Optimize: If user is "pendata", only listen to their own surveys to massively save reads!
+    let surveysQuery;
+    if (role === 'pendata' && fullname) {
+      surveysQuery = query(
+        collection(db, 'surveys'),
+        where('namaPendata', '==', fullname)
+      );
+    } else {
+      surveysQuery = collection(db, 'surveys');
+    }
+
+    unsub = onSnapshot(surveysQuery, (snapshot) => {
       const data: SurveyData[] = [];
       snapshot.forEach(doc => {
         if (doc.id !== '_setup_metadata') {
@@ -552,12 +577,24 @@ export async function deleteSurveyFromFirestore(id: string): Promise<boolean> {
  * Deletes all surveys from Firebase Firestore 'surveys' collection.
  * Uses soft delete to allow delta/partial updates synchronization across clients.
  */
-export async function clearAllSurveysFromFirestore(): Promise<boolean> {
+export async function clearAllSurveysFromFirestore(
+  role?: 'admin' | 'pendata' | null,
+  fullname?: string
+): Promise<boolean> {
   if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) return true;
 
   try {
     await ensureAuthenticated();
-    const querySnapshot = await getDocs(collection(db, 'surveys'));
+    
+    // Optimize: If user is "pendata", only query and delete their own surveys!
+    let deleteQuery;
+    if (role === 'pendata' && fullname) {
+      deleteQuery = query(collection(db, 'surveys'), where('namaPendata', '==', fullname));
+    } else {
+      deleteQuery = collection(db, 'surveys');
+    }
+
+    const querySnapshot = await getDocs(deleteQuery);
     const batchPromises: Promise<any>[] = [];
     querySnapshot.forEach((docSnap) => {
       if (docSnap.id !== '_setup_metadata') {

@@ -76,7 +76,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }
 
         // Always attempt online seeding to Cloud Firestore database if available and not already present
-        if (isFirebaseConfigured && db) {
+        const isOnlineSeeded = localStorage.getItem('dtsen_accounts_seeded') === 'true';
+        if (!isOnlineSeeded && isFirebaseConfigured && db) {
           try {
             const adminDocRef = doc(db, 'users', 'slrttanjungbalai');
             const adminSnap = await getDoc(adminDocRef);
@@ -96,6 +97,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           } catch (fasilErr) {
             console.warn("Check/seed fasilitator document warning:", fasilErr);
           }
+
+          localStorage.setItem('dtsen_accounts_seeded', 'true');
         }
       } catch (err) {
         console.warn("Background seeding warning:", err);
