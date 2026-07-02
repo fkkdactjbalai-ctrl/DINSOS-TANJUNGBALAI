@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, UserCheck, KeyRound, AlertCircle, Eye, EyeOff, Lock, HeartHandshake, UserPlus, LogIn, ChevronRight } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { db, isFirebaseConfigured, fetchUserFromFirestore, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
+import { db, isFirebaseConfigured, fetchUserFromFirestore, fetchUserDirectlyFromServer, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
 
 interface LoginScreenProps {
   onLoginSuccess: (role: 'admin' | 'pendata', username: string, fullname: string) => void;
@@ -82,13 +82,14 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           console.warn("Offline local seeding warning:", e);
         }
 
-        // Always attempt online seeding to Cloud Firestore database if available and not already present
-        const isOnlineSeeded = localStorage.getItem(`dtsen_accounts_seeded_${firebaseConfig.projectId}`) === 'true';
-        if (!isOnlineSeeded && isFirebaseConfigured && db) {
+        // Always attempt online seeding/repair to Cloud Firestore database if available
+        if (isFirebaseConfigured && db) {
           try {
             const adminDocRef = doc(db, 'users', 'slrttanjungbalai');
             const adminSnap = await getDoc(adminDocRef);
-            if (!adminSnap.exists()) {
+            const adminData = adminSnap.exists() ? adminSnap.data() : null;
+            if (!adminSnap.exists() || !adminData?.password || !adminData?.role || !adminData?.fullname) {
+              console.info("Seeding/repairing default admin slrttanjungbalai in Cloud Firestore...");
               await saveUserToFirestore('slrttanjungbalai', seedAdmin);
             }
           } catch (adminErr) {
@@ -98,14 +99,14 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           try {
             const fasilitatorDocRef = doc(db, 'users', 'fasilitator slrt');
             const fasilitatorSnap = await getDoc(fasilitatorDocRef);
-            if (!fasilitatorSnap.exists()) {
+            const fasilData = fasilitatorSnap.exists() ? fasilitatorSnap.data() : null;
+            if (!fasilitatorSnap.exists() || !fasilData?.password || !fasilData?.role) {
+              console.info("Seeding/repairing default fasilitator in Cloud Firestore...");
               await saveUserToFirestore('fasilitator slrt', seedFasilitator);
             }
           } catch (fasilErr) {
             console.warn("Check/seed fasilitator document warning:", fasilErr);
           }
-
-          localStorage.setItem(`dtsen_accounts_seeded_${firebaseConfig.projectId}`, 'true');
         }
       } catch (err) {
         console.warn("Background seeding warning:", err);
@@ -132,8 +133,54 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setIsLoading(true);
     try {
       if (isFirebaseConfigured) {
-        // Online Firestore verification
-        const userData = await fetchUserFromFirestore(username.trim().toLowerCase());
+        // Online Firestore verification - direct real-time check
+        let userData = null;
+        let isSearchSuccessful = false;
+        try {
+          userData = await fetchUserDirectlyFromServer(username.trim().toLowerCase());
+          isSearchSuccessful = true;
+        } catch (serverErr) {
+          console.warn("Direct server fetch failed, trying fetchUserFromFirestore fallback:", serverErr);
+          try {
+            userData = await fetchUserFromFirestore(username.trim().toLowerCase());
+            isSearchSuccessful = true;
+          } catch (fallbackErr) {
+            console.error("Firestore access failed completely:", fallbackErr);
+          }
+        }
+        
+        // Auto-heal slrttanjungbalai default admin if it exists in DB but lacks password/fields
+        if (userData && username.trim().toLowerCase() === 'slrttanjungbalai' && !userData.password) {
+          if (password === 'SLRTKITO9102') {
+            console.info("On-the-fly repairing slrttanjungbalai credentials in memory & Cloud Firestore...");
+            userData = {
+              ...userData,
+              username: 'slrttanjungbalai',
+              fullname: 'ADMINISTRATOR PPKS',
+              password: 'SLRTKITO9102',
+              role: 'admin',
+              isApproved: true
+            };
+            await saveUserToFirestore('slrttanjungbalai', userData);
+          }
+        }
+
+        // Auto-heal fasilitator slrt default account if it exists in DB but lacks password/fields
+        if (userData && (username.trim().toLowerCase() === 'fasilitator slrt' || username.trim().toLowerCase() === 'fasilitatorslrt') && !userData.password) {
+          if (password === 'FS2026') {
+            console.info("On-the-fly repairing fasilitator slrt credentials in memory & Cloud Firestore...");
+            userData = {
+              ...userData,
+              username: 'fasilitator slrt',
+              fullname: 'FASILITATOR SLRT',
+              password: 'FS2026',
+              role: 'pendata',
+              isApproved: true
+            };
+            await saveUserToFirestore('fasilitator slrt', userData);
+          }
+        }
+
         if (userData) {
           if (userData.password === password) {
             if (userData.role !== roleSelection) {
@@ -151,8 +198,36 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             setError('Sandi Pengaman tidak valid untuk akun ini!');
           }
         } else {
-          // Fallback check: default credentials for convenience
-          if (roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102') {
+          // If we connected successfully but the user is not found, force rejection for custom users
+          const isBypassAdmin = roleSelection === 'admin' && username.trim().toLowerCase() === 'slrttanjungbalai' && password === 'SLRTKITO9102';
+          const isBypassFasilitator = roleSelection === 'pendata' && (username.trim().toLowerCase() === 'fasilitator slrt' || username.trim().toLowerCase() === 'fasilitatorslrt') && password === 'FS2026';
+          const isBypassPendata = roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026';
+
+          if (isSearchSuccessful && !(isBypassAdmin || isBypassFasilitator || isBypassPendata)) {
+            // Force deny access
+            setError("Login Gagal: Akun tidak ditemukan di Cloud Database");
+            
+            // Clean up sessions and local cache for this user
+            localStorage.removeItem('dtsen_role');
+            localStorage.removeItem('dtsen_username');
+            localStorage.removeItem('dtsen_fullname');
+            try {
+              const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+              if (offlineUsersJson) {
+                const offlineUsers = JSON.parse(offlineUsersJson);
+                delete offlineUsers[username.trim().toLowerCase()];
+                localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+              }
+            } catch (err) {
+              console.warn("Failed to clean offline user cache:", err);
+            }
+            
+            setIsLoading(false);
+            return;
+          }
+
+          // Fallback check: default credentials for convenience (seeding/bypassing)
+          if (isBypassAdmin) {
             const seedAdmin = {
               username: 'slrttanjungbalai',
               fullname: 'ADMINISTRATOR PPKS',
@@ -163,7 +238,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             };
             await saveUserToFirestore('slrttanjungbalai', seedAdmin);
             onLoginSuccess('admin', 'slrttanjungbalai', 'ADMINISTRATOR PPKS');
-          } else if (roleSelection === 'pendata' && (username.trim().toLowerCase() === 'fasilitator slrt' || username.trim().toLowerCase() === 'fasilitatorslrt') && password === 'FS2026') {
+          } else if (isBypassFasilitator) {
             const seedPendata = {
               username: 'fasilitator slrt',
               fullname: 'FASILITATOR SLRT',
@@ -174,13 +249,18 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             };
             await saveUserToFirestore('fasilitator slrt', seedPendata);
             onLoginSuccess('pendata', 'fasilitator slrt', 'FASILITATOR SLRT');
-          } else if (roleSelection === 'pendata' && username.trim().toLowerCase() === 'pendata' && password === 'FS2026') {
+          } else if (isBypassPendata) {
             onLoginSuccess('pendata', 'pendata', 'PETUGAS LAPANGAN');
           } else {
             if (isFirestoreQuotaExceeded()) {
               setError('Mode Offline (Kuota Firebase Terlampaui): Akun Anda belum terdaftar di HP/PC ini. Silakan masuk menggunakan Akun Petugas Default -> Username: "fasilitator slrt" | Sandi: "FS2026".');
             } else {
-              setError('Akun tidak ditemukan di cloud database. Silakan ganti tab ke "Daftar Akun" di atas terlebih dahulu.');
+              setError('Login Gagal: Akun tidak ditemukan di Cloud Database');
+              
+              // Clear any local sessions
+              localStorage.removeItem('dtsen_role');
+              localStorage.removeItem('dtsen_username');
+              localStorage.removeItem('dtsen_fullname');
             }
           }
         }

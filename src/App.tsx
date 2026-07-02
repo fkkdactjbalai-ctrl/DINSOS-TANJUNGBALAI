@@ -16,7 +16,8 @@ import {
   clearAllSurveysFromFirestore,
   isFirebaseConfigured,
   isFirestoreQuotaExceeded,
-  registerQuotaExceededCallback
+  registerQuotaExceededCallback,
+  fetchUserDirectlyFromServer
 } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
@@ -533,7 +534,20 @@ export default function App() {
   };
 
   // Create or Update survey submission
-  const handleSurveySubmit = (submittedData: SurveyData) => {
+  const handleSurveySubmit = async (submittedData: SurveyData) => {
+    // 2. Submit Data Protection: Check account validity in Cloud Firestore if configured
+    if (isFirebaseConfigured && username) {
+      try {
+        const userData = await fetchUserDirectlyFromServer(username);
+        if (!userData) {
+          showToast("Gagal Mengirim Data: Akun Anda tidak terdaftar atau telah dihapus dari Cloud Database.", 'danger');
+          return;
+        }
+      } catch (err) {
+        console.warn("Account validity check failed due to network, continuing with caution:", err);
+      }
+    }
+
     const previous = [...surveys];
     let updatedSurveys: SurveyData[] = [];
     let finalSurveyToSync: SurveyData;
@@ -618,6 +632,19 @@ export default function App() {
 
   // Sync a single record manually
   const handleSyncSurvey = async (id: string, customUrl?: string): Promise<{ success: boolean; message: string }> => {
+    // 2. Submit Data Protection: Check account validity in Cloud Firestore if configured
+    if (isFirebaseConfigured && username) {
+      try {
+        const userData = await fetchUserDirectlyFromServer(username);
+        if (!userData) {
+          showToast("Gagal Mengirim Data: Akun Anda tidak terdaftar atau telah dihapus dari Cloud Database.", 'danger');
+          return { success: false, message: 'Akun Anda tidak terdaftar atau telah dihapus dari Cloud Database.' };
+        }
+      } catch (err) {
+        console.warn("Account validity check failed during manual sync:", err);
+      }
+    }
+
     const urlToUse = customUrl || syncUrl;
     const targetSurvey = surveys.find(s => s.id === id);
     if (!targetSurvey) return { success: false, message: 'Data tidak ditemukan' };
@@ -643,6 +670,19 @@ export default function App() {
 
   // Sync all records manually
   const handleSyncAll = async (unsyncedOnly: boolean = true): Promise<{ success: boolean; count: number }> => {
+    // 2. Submit Data Protection: Check account validity in Cloud Firestore if configured
+    if (isFirebaseConfigured && username) {
+      try {
+        const userData = await fetchUserDirectlyFromServer(username);
+        if (!userData) {
+          showToast("Gagal Mengirim Data: Akun Anda tidak terdaftar atau telah dihapus dari Cloud Database.", 'danger');
+          return { success: false, count: 0 };
+        }
+      } catch (err) {
+        console.warn("Account validity check failed during manual bulk sync:", err);
+      }
+    }
+
     const toSync = unsyncedOnly ? surveys.filter(s => !s.synced) : surveys;
     if (toSync.length === 0) {
       showToast('Tidak ada data yang perlu disinkronkan.', 'info');
@@ -1404,7 +1444,7 @@ export default function App() {
 
             {/* Format Laporan Bulanan Sensus Keluarga */}
             {(activeView === 'laporan_bulanan' || isPrinting) && (
-              <section id="monthly-report-section" className="pt-4 animate-fade-in">
+              <section id="monthly-report-section-wrapper" className="pt-4 animate-fade-in">
                 <MonthlyReportPanel 
                   surveys={surveys}
                   onViewSurvey={setSelectedSurvey}

@@ -450,8 +450,8 @@ export default function MonthlyReportPanel({ surveys, onViewSurvey, userRole }: 
 
           </div>
 
-          {/* Section B-1: Visualisasi Grafik Batang Sebaran KK (non-printable) */}
-          <div className="bg-slate-50/40 rounded-2xl border border-slate-150 p-5 space-y-4 non-printable">
+          {/* Section B-1: Visualisasi Grafik Batang Sebaran KK */}
+          <div className="bg-slate-50/40 rounded-2xl border border-slate-150 p-5 space-y-4 print-chart-container-wrapper">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -522,7 +522,7 @@ export default function MonthlyReportPanel({ surveys, onViewSurvey, userRole }: 
           </div>
 
           {/* Section B: Grid and Detailed Tables */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print-page-break-before">
             
             {/* Table 1: Kelurahan Breakdown */}
             <div className="space-y-2.5">
@@ -645,7 +645,7 @@ export default function MonthlyReportPanel({ surveys, onViewSurvey, userRole }: 
           </div>
 
           {/* Section C: Detailed Registries List */}
-          <div className="space-y-2.5 pt-2">
+          <div className="space-y-2.5 pt-2 print-page-break-before">
             <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
               <Award className="h-4 w-4 text-slate-500 shrink-0" />
               <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Rincian Log Sensus Sensus Masuk — {currentMonthLabel} {selectedYear}</h3>

@@ -15,14 +15,24 @@ html {
 /* Custom prints overrides to make Sensus Sheets print beautifully */
 @media print {
   @page {
-    margin: 1.2cm !important;
+    size: portrait;
+    margin: 1.2cm 1.5cm 1.2cm 1.5cm !important;
+  }
+
+  /* Force light colors and hide dark UI themes */
+  * {
+    color-scheme: light !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background-color: transparent !important;
   }
 
   html, body {
-    background-color: white !important;
-    background: white !important;
+    background-color: #ffffff !important;
+    background: #ffffff !important;
     color: #000000 !important;
     font-size: 10px !important;
+    font-family: "Plus Jakarta Sans", "Inter", sans-serif !important;
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
@@ -38,7 +48,7 @@ html {
     display: block !important;
   }
 
-  /* Make sure container is completely flat and expanded on paper */
+  /* Make sure report main wrapper has 100% width, no padding/margin except print spacing */
   #monthly-report-section, 
   [id="monthly-report-section"] {
     display: block !important;
@@ -48,23 +58,27 @@ html {
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
-    background: transparent !important;
+    background: #ffffff !important;
+    color: #000000 !important;
     overflow: visible !important;
   }
 
-  /* Flatten all parent wrappers and grids to prevent alignment clipping */
-  #root, .grid, .lg\:col-span-8, div:not(.grid-cols-2):not(.lg\:grid-cols-4):not(.lg\:grid-cols-2) {
+  /* Flatten all parent wrappers and grids to prevent alignment clipping and flex messes */
+  #root, .grid, .lg\:col-span-8, div {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Un-grid parent structure to let document flow sequentially */
+  #root, main, .max-w-7xl, .grid-cols-1, .lg\:grid-cols-12, .lg\:col-span-8, #monthly-report-section-wrapper {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
-    overflow: visible !important;
-    box-shadow: none !important;
-    border: none !important;
   }
 
-  /* Hide navigation sidebar, forms, maps, charts, and buttons */
+  /* Hide navigation, sidebar, header, form, maps, and buttons */
   header, 
   form, 
   aside, 
@@ -98,65 +112,90 @@ html {
     width: 100% !important;
   }
 
-  /* Force table columns to respect exact width allocation on paper */
+  /* Force table to fit beautifully within standard portrait sheet */
   table {
     width: 100% !important;
     max-width: 100% !important;
     table-layout: fixed !important;
     border-collapse: collapse !important;
     word-break: break-word !important;
-    margin-top: 8px !important;
-    margin-bottom: 8px !important;
+    margin-top: 10px !important;
+    margin-bottom: 10px !important;
   }
 
-  /* Format headers and rows with borders and print-safe sizing */
   th, td {
-    padding: 4px 6px !important;
+    padding: 6px 8px !important;
     font-size: 8.5px !important;
-    border: 1px solid #cbd5e1 !important;
+    border: 1px solid #94a3b8 !important;
     word-wrap: break-word !important;
     white-space: normal !important;
     color: #000000 !important;
     text-align: left;
+    background-color: transparent !important;
   }
 
   th {
     background-color: #f1f5f9 !important;
-    color: #000000 !important;
     font-weight: bold !important;
   }
 
-  /* Columns precise widths (Total: 100% exactly matching the paper width) */
-  th:nth-child(1), td:nth-child(1) { width: 5% !important; text-align: center; } /* No */
-  th:nth-child(2), td:nth-child(2) { width: 11% !important; } /* Tanggal */
-  th:nth-child(3), td:nth-child(3) { width: 20% !important; } /* Nomor KK */
-  th:nth-child(4), td:nth-child(4) { width: 22% !important; } /* Responden */
-  th:nth-child(5), td:nth-child(5) { width: 24% !important; } /* Alamat & Kelurahan */
-  th:nth-child(6), td:nth-child(6) { width: 6% !important; text-align: center; } /* Jiwa */
-  th:nth-child(7), td:nth-child(7) { width: 6% !important; text-align: center; } /* PMKS */
-  th:nth-child(8), td:nth-child(8) { width: 6% !important; text-align: center; } /* Bantuan */
-
   /* Format sebaran kelurahan table columns specifically */
   #monthly-report-section table th, #monthly-report-section table td {
-    border: 1px solid #94a3b8 !important;
+    border: 1px solid #475569 !important;
   }
 
-  /* Render summary metric blocks cleanly side-by-side on standard paper */
+  /* Precise layout widths for columns of main sensus log table */
+  th:nth-child(1), td:nth-child(1) { width: 5% !important; text-align: center; } /* No */
+  th:nth-child(2), td:nth-child(2) { width: 12% !important; } /* Tanggal Sensus */
+  th:nth-child(3), td:nth-child(3) { width: 22% !important; } /* Nomor KK */
+  th:nth-child(4), td:nth-child(4) { width: 21% !important; } /* Nama Kepala / Responden */
+  th:nth-child(5), td:nth-child(5) { width: 24% !important; } /* Alamat & Kelurahan */
+  th:nth-child(6), td:nth-child(6) { width: 6% !important; text-align: center; } /* Jiwa */
+  th:nth-child(7), td:nth-child(7) { width: 5% !important; text-align: center; } /* PMKS */
+  th:nth-child(8), td:nth-child(8) { width: 5% !important; text-align: center; } /* Bantuan */
+
+  /* Render summary metric blocks cleanly in a grid on standard portrait paper */
   .grid-cols-2, .lg\:grid-cols-4 {
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 8px !important;
-    margin-bottom: 12px !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
   }
 
-  .bg-slate-50\/50 {
+  .bg-slate-50\/50, .p-4 {
     background-color: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    padding: 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 10px !important;
     border-radius: 8px !important;
   }
 
-  /* Side-by-side arrangement for breakdown blocks on paper */
+  /* Render visual Bar chart responsively without collapsing */
+  .print-chart-container-wrapper {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 230px !important;
+    background: transparent !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+    margin-bottom: 24px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-chart-container-wrapper svg {
+    max-width: 100% !important;
+    height: 100% !important;
+  }
+
+  .recharts-responsive-container {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 180px !important;
+  }
+
+  /* Side-by-side arrangement for breakdown blocks on paper (Page 2) */
   .grid-cols-1.lg\:grid-cols-2 {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -164,15 +203,45 @@ html {
     margin-bottom: 16px !important;
   }
 
-  /* Prevent row and section orphan breaks across pages */
+  /* Grid of age group and economic metrics */
+  .grid-cols-5 {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .grid-cols-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .p-2, .p-2\.5 {
+    background-color: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 6px !important;
+  }
+
+  /* Section and page break controls */
+  .print-page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+    margin-top: 0 !important;
+    padding-top: 10px !important;
+  }
+
   tr {
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
+
   thead {
     display: table-header-group !important;
   }
+
   .card, section, div {
-    page-break-inside: avoid;
+    page-break-inside: auto;
   }
 }
 

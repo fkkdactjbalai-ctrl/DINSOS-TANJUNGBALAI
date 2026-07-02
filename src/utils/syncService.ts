@@ -733,6 +733,85 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
 }
 
 /**
+ * Fetches a user document directly from the Cloud Firestore server without offline cache fallback.
+ * Returns null if not found on the server, throws error if connection fails.
+ */
+export async function fetchUserDirectlyFromServer(username: string): Promise<any | null> {
+  const safeUsername = (username || '').toLowerCase().trim();
+  if (!safeUsername) return null;
+
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    return null;
+  }
+
+  await ensureAuthenticated();
+  
+  // 1. Try direct fetch by document ID first with source server
+  let userDoc;
+  try {
+    userDoc = await getDocFromServer(doc(db, 'users', safeUsername));
+  } catch (serverErr) {
+    console.warn("Direct getDocFromServer failed, trying default getDoc:", serverErr);
+    userDoc = await getDoc(doc(db, 'users', safeUsername));
+  }
+
+  if (userDoc.exists()) {
+    const data = userDoc.data();
+    // Sync to local cache
+    try {
+      const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+      const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+      offlineUsers[safeUsername] = { ...offlineUsers[safeUsername], ...data };
+      localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+    } catch (cacheErr) {
+      console.warn("Failed to cache fetched user locally:", cacheErr);
+    }
+    return data;
+  }
+
+  // 2. Fallback: Search across all users on server
+  console.info(`User doc not found directly on server for "${safeUsername}". Trying fallback search...`);
+  const querySnapshot = await getDocs(collection(db, 'users'));
+  const allUsers: any[] = [];
+  querySnapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    allUsers.push({
+      ...data,
+      username: data.username || docSnap.id
+    });
+  });
+
+  const cleanStr = (str: string) => (str || '').toLowerCase().replace(/[\s\._\-]/g, '');
+  const cleanSafeUsername = cleanStr(safeUsername);
+  const matchedUser = allUsers.find(u => {
+    const uName = (u.username || '').toLowerCase().trim();
+    const uFull = (u.fullname || '').toLowerCase().trim();
+    return uName === safeUsername || 
+           uFull === safeUsername ||
+           cleanStr(uName) === cleanSafeUsername ||
+           cleanStr(uFull) === cleanSafeUsername;
+  });
+
+  if (matchedUser) {
+    // Sync to local cache
+    try {
+      const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+      const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+      const safeMatchedUsername = (matchedUser.username || '').toLowerCase().trim();
+      if (safeMatchedUsername) {
+        offlineUsers[safeMatchedUsername] = { ...offlineUsers[safeMatchedUsername], ...matchedUser };
+        localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+      }
+    } catch (cacheErr) {
+      console.warn("Failed to cache matched user locally:", cacheErr);
+    }
+    return matchedUser;
+  }
+
+  return null;
+}
+
+/**
  * Creates/registers a user document in Firestore.
  */
 export async function saveUserToFirestore(username: string, userData: any): Promise<boolean> {
