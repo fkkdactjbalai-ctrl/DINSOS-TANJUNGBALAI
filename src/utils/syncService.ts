@@ -50,7 +50,11 @@ if (isFirebaseConfigured) {
 
 export { app, db, auth };
 
-let firestoreQuotaExceeded = localStorage.getItem('dtsen_quota_exceeded') === 'true';
+const quotaExceededKey = firebaseConfig && firebaseConfig.projectId 
+  ? `dtsen_quota_exceeded_${firebaseConfig.projectId}` 
+  : 'dtsen_quota_exceeded';
+
+let firestoreQuotaExceeded = localStorage.getItem(quotaExceededKey) === 'true';
 let quotaExceededCallback: ((val: boolean) => void) | null = null;
 
 export function isFirestoreQuotaExceeded(): boolean {
@@ -60,7 +64,7 @@ export function isFirestoreQuotaExceeded(): boolean {
 export function setFirestoreQuotaExceeded(val: boolean) {
   if (firestoreQuotaExceeded !== val) {
     firestoreQuotaExceeded = val;
-    localStorage.setItem('dtsen_quota_exceeded', val ? 'true' : 'false');
+    localStorage.setItem(quotaExceededKey, val ? 'true' : 'false');
     if (quotaExceededCallback) {
       quotaExceededCallback(val);
     }

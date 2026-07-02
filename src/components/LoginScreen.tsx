@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, UserCheck, KeyRound, AlertCircle, Eye, EyeOff, Lock, HeartHandshake, UserPlus, LogIn, ChevronRight } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
 import { db, isFirebaseConfigured, fetchUserFromFirestore, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
 
 interface LoginScreenProps {
@@ -76,7 +77,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }
 
         // Always attempt online seeding to Cloud Firestore database if available and not already present
-        const isOnlineSeeded = localStorage.getItem('dtsen_accounts_seeded') === 'true';
+        const isOnlineSeeded = localStorage.getItem(`dtsen_accounts_seeded_${firebaseConfig.projectId}`) === 'true';
         if (!isOnlineSeeded && isFirebaseConfigured && db) {
           try {
             const adminDocRef = doc(db, 'users', 'slrttanjungbalai');
@@ -98,7 +99,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             console.warn("Check/seed fasilitator document warning:", fasilErr);
           }
 
-          localStorage.setItem('dtsen_accounts_seeded', 'true');
+          localStorage.setItem(`dtsen_accounts_seeded_${firebaseConfig.projectId}`, 'true');
         }
       } catch (err) {
         console.warn("Background seeding warning:", err);
