@@ -484,7 +484,7 @@ export default function App() {
   const syncingInProgressRef = useRef<Set<string>>(new Set());
   
   useEffect(() => {
-    if (!syncUrl || !isAutoSync) return;
+    if ((!isFirebaseConfigured && !syncUrl) || !isAutoSync) return;
 
     const unsynced = surveys.filter(s => !s.synced);
     if (unsynced.length === 0) return;
@@ -567,7 +567,11 @@ export default function App() {
       };
       finalSurveyToSync = newSurvey;
       updatedSurveys = [newSurvey, ...surveys];
-      showToast(`Data DTSEN KK ${submittedData.noKK} berhasil tersimpan ke LocalStorage!`, 'success');
+      if (isFirebaseConfigured) {
+        showToast(`Data DTSEN KK ${submittedData.noKK} berhasil disimpan! Memproses sinkronisasi ke cloud database...`, 'success');
+      } else {
+        showToast(`Data DTSEN KK ${submittedData.noKK} berhasil tersimpan ke LocalStorage!`, 'success');
+      }
     }
 
     saveToLocalStorage(updatedSurveys);
@@ -670,8 +674,8 @@ export default function App() {
 
   // Pull all records from cloud database and merge locally
   const handlePullCloudData = async (forceFull: boolean = false) => {
-    if (!syncUrl) {
-      showToast('Gagal menarik data: URL Google Apps Script belum dikonfigurasi.', 'danger');
+    if (!isFirebaseConfigured && !syncUrl) {
+      showToast('Gagal menarik data: Setelan cloud database atau URL Google Sheets belum dikonfigurasi.', 'danger');
       return;
     }
     

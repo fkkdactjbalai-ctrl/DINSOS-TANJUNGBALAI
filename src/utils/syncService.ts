@@ -633,11 +633,29 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
   if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
     const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
     const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-    return offlineUsers[safeUsername] || null;
+    
+    // Support name/username fallback in offline local storage too!
+    const localUser = offlineUsers[safeUsername];
+    if (localUser) return localUser;
+    
+    const matchedOffline = Object.values(offlineUsers).find((u: any) => 
+      (u.username || '').toLowerCase().trim() === safeUsername ||
+      (u.fullname || '').toLowerCase().trim() === safeUsername
+    );
+    return matchedOffline || null;
   }
   try {
     await ensureAuthenticated();
-    const userDoc = await getDoc(doc(db, 'users', safeUsername));
+    
+    // 1. Try direct fetch by document ID first (most efficient)
+    let userDoc;
+    try {
+      userDoc = await getDocFromServer(doc(db, 'users', safeUsername));
+    } catch (serverErr) {
+      console.warn("Failed to fetch user directly from server, falling back to standard getDoc:", serverErr);
+      userDoc = await getDoc(doc(db, 'users', safeUsername));
+    }
+
     if (userDoc.exists()) {
       const data = userDoc.data();
       // Cache this user data locally
@@ -651,15 +669,66 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
       }
       return data;
     }
+
+    // 2. Fallback: If not found by document ID, search all users (e.g. if they logged in with Full Name instead of NIK)
+    console.info(`User doc not found directly for "${safeUsername}". Trying fallback search across all users...`);
+    const allUsers = await fetchAllUsersFromFirestore();
+    const cleanStr = (str: string) => (str || '').toLowerCase().replace(/[\s\._\-]/g, '');
+    const cleanSafeUsername = cleanStr(safeUsername);
+    const matchedUser = allUsers.find(u => {
+      const uName = (u.username || '').toLowerCase().trim();
+      const uFull = (u.fullname || '').toLowerCase().trim();
+      return uName === safeUsername || 
+             uFull === safeUsername ||
+             cleanStr(uName) === cleanSafeUsername ||
+             cleanStr(uFull) === cleanSafeUsername;
+    });
+
+    if (matchedUser) {
+      // Cache this user data locally too
+      try {
+        const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+        const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+        const safeMatchedUsername = (matchedUser.username || '').toLowerCase().trim();
+        if (safeMatchedUsername) {
+          offlineUsers[safeMatchedUsername] = { ...offlineUsers[safeMatchedUsername], ...matchedUser };
+          localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+        }
+      } catch (cacheErr) {
+        console.warn("Failed to cache matched user locally:", cacheErr);
+      }
+      return matchedUser;
+    }
+
     return null;
   } catch (error) {
-    console.warn("Error fetching user from Firestore:", error);
+    console.error("Error fetching user from Firestore:", error);
     checkIfQuotaError(error);
     
     // Fallback to offline local users
     const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
     const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
-    return offlineUsers[safeUsername] || null;
+    const localUser = offlineUsers[safeUsername];
+    if (localUser) {
+      return localUser;
+    }
+
+    const cleanStr = (str: string) => (str || '').toLowerCase().replace(/[\s\._\-]/g, '');
+    const cleanSafeUsername = cleanStr(safeUsername);
+    const matchedOffline = Object.values(offlineUsers).find((u: any) => {
+      const uName = (u.username || '').toLowerCase().trim();
+      const uFull = (u.fullname || '').toLowerCase().trim();
+      return uName === safeUsername || 
+             uFull === safeUsername ||
+             cleanStr(uName) === cleanSafeUsername ||
+             cleanStr(uFull) === cleanSafeUsername;
+    });
+    if (matchedOffline) {
+      return matchedOffline;
+    }
+    
+    // Propagate the actual error if the user is not found locally, so the login UI knows it's a connection issue
+    throw error;
   }
 }
 
