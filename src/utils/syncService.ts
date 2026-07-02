@@ -13,6 +13,7 @@ import {
   deleteDoc, 
   onSnapshot, 
   getDocFromServer,
+  getDocsFromServer,
   updateDoc,
   query,
   where
@@ -741,7 +742,7 @@ export async function fetchUserDirectlyFromServer(username: string): Promise<any
   if (!safeUsername) return null;
 
   if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
-    return null;
+    throw new Error("Cloud database is offline, unconfigured, or quota has been exceeded.");
   }
 
   await ensureAuthenticated();
@@ -771,7 +772,15 @@ export async function fetchUserDirectlyFromServer(username: string): Promise<any
 
   // 2. Fallback: Search across all users on server
   console.info(`User doc not found directly on server for "${safeUsername}". Trying fallback search...`);
-  const querySnapshot = await getDocs(collection(db, 'users'));
+  
+  let querySnapshot;
+  try {
+    querySnapshot = await getDocsFromServer(collection(db, 'users'));
+  } catch (docsErr) {
+    console.warn("getDocsFromServer failed, trying default getDocs:", docsErr);
+    querySnapshot = await getDocs(collection(db, 'users'));
+  }
+
   const allUsers: any[] = [];
   querySnapshot.forEach((docSnap) => {
     const data = docSnap.data();

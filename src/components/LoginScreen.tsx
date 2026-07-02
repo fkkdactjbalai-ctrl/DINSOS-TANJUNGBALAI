@@ -143,7 +143,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           console.warn("Direct server fetch failed, trying fetchUserFromFirestore fallback:", serverErr);
           try {
             userData = await fetchUserFromFirestore(username.trim().toLowerCase());
-            isSearchSuccessful = true;
+            // isSearchSuccessful remains false here because we failed direct server fetch
+            // and fetchUserFromFirestore can return cached offline data.
           } catch (fallbackErr) {
             console.error("Firestore access failed completely:", fallbackErr);
           }
