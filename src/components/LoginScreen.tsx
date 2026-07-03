@@ -3,6 +3,7 @@ import { Shield, UserCheck, KeyRound, AlertCircle, Eye, EyeOff, Lock, HeartHands
 import { doc, getDoc } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { db, isFirebaseConfigured, fetchUserFromFirestore, fetchUserDirectlyFromServer, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
+import { safeStorage } from '../utils/storage';
 
 interface LoginScreenProps {
   onLoginSuccess: (role: 'admin' | 'pendata', username: string, fullname: string) => void;
@@ -58,10 +59,10 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         // Always save to offline local storage to ensure instant offline access if not seeded
         try {
           const offlineSeededKey = `dtsen_offline_seeded_${firebaseConfig.projectId || 'default'}`;
-          const isOfflineSeeded = localStorage.getItem(offlineSeededKey) === 'true';
+          const isOfflineSeeded = safeStorage.getItem(offlineSeededKey) === 'true';
 
           if (!isOfflineSeeded) {
-            const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+            const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
             const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
             let changed = false;
             
@@ -74,9 +75,9 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               changed = true;
             }
             if (changed) {
-              localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+              safeStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
             }
-            localStorage.setItem(offlineSeededKey, 'true');
+            safeStorage.setItem(offlineSeededKey, 'true');
           }
         } catch (e) {
           console.warn("Offline local seeding warning:", e);
@@ -209,15 +210,15 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             setError("Login Gagal: Akun tidak ditemukan di Cloud Database");
             
             // Clean up sessions and local cache for this user
-            localStorage.removeItem('dtsen_role');
-            localStorage.removeItem('dtsen_username');
-            localStorage.removeItem('dtsen_fullname');
+            safeStorage.removeItem('dtsen_role');
+            safeStorage.removeItem('dtsen_username');
+            safeStorage.removeItem('dtsen_fullname');
             try {
-              const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+              const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
               if (offlineUsersJson) {
                 const offlineUsers = JSON.parse(offlineUsersJson);
                 delete offlineUsers[username.trim().toLowerCase()];
-                localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+                safeStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
               }
             } catch (err) {
               console.warn("Failed to clean offline user cache:", err);
@@ -259,15 +260,15 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               setError('Login Gagal: Akun tidak ditemukan di Cloud Database');
               
               // Clear any local sessions
-              localStorage.removeItem('dtsen_role');
-              localStorage.removeItem('dtsen_username');
-              localStorage.removeItem('dtsen_fullname');
+              safeStorage.removeItem('dtsen_role');
+              safeStorage.removeItem('dtsen_username');
+              safeStorage.removeItem('dtsen_fullname');
             }
           }
         }
       } else {
         // Offline / Local Mode verification
-        const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+        const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
         const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
         const localUser = offlineUsers[username.trim().toLowerCase()];
 
@@ -305,7 +306,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       
       // Fallback check: see if we can find them in local cached storage first!
       try {
-        const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+        const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
         const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
         const localUser = offlineUsers[username.trim().toLowerCase()];
         
@@ -400,7 +401,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }
       } else {
         // Local Mode database
-        const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+        const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
         const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
         
         if (offlineUsers[formattedUsername]) {
@@ -410,7 +411,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }
 
         offlineUsers[formattedUsername] = newUser;
-        localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+        safeStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
         if (roleSelection === 'pendata') {
           setSuccess('Registrasi Berhasil! Akun Petugas saat ini MENUNGGU PERSETUJUAN offline dari Administrator (SLRTTANJUNGBALAI).');
         } else {

@@ -7,6 +7,7 @@ import {
 import { SurveyData, FamilyMember } from '../types';
 import * as opt from '../data/options';
 import { isFirebaseConfigured, fetchUserFromFirestore, saveUserDraftToFirestore } from '../utils/syncService';
+import { safeStorage } from '../utils/storage';
 
 const compressCanvasTo300KB = (canvas: HTMLCanvasElement, initialQuality: number = 0.85): string => {
   let quality = initialQuality;
@@ -52,7 +53,7 @@ interface SurveyWizardFormProps {
 
 function mergeSurveyWithDefaults(survey: SurveyData | null | undefined): SurveyData {
   const defaults = opt.emptySurvey();
-  const lastNamaPendata = localStorage.getItem('dtsen_last_nama_pendata') || '';
+  const lastNamaPendata = safeStorage.getItem('dtsen_last_nama_pendata') || safeStorage.getItem('dtsen_fullname') || '';
   if (lastNamaPendata && !defaults.namaPendata) {
     defaults.namaPendata = lastNamaPendata;
   }
@@ -139,7 +140,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
         }
 
         // Fallback or override using local storage backup if available and newer or if we're offline
-        const localDraftJson = localStorage.getItem(`dtsen_draft_${username}`);
+        const localDraftJson = safeStorage.getItem(`dtsen_draft_${username}`);
         if (localDraftJson) {
           try {
             const parsed = JSON.parse(localDraftJson);
@@ -175,7 +176,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     if (!username || initialData || !draftLoaded) return;
 
     const timer = setTimeout(() => {
-      localStorage.setItem(
+      safeStorage.setItem(
         `dtsen_draft_${username}`,
         JSON.stringify({ currentStep: currentSection, draftData: formData })
       );
@@ -597,7 +598,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
     // Clear draft storage specifically
     if (username) {
       saveUserDraftToFirestore(username, 0, null);
-      localStorage.removeItem(`dtsen_draft_${username}`);
+      safeStorage.removeItem(`dtsen_draft_${username}`);
     }
   };
 
@@ -628,7 +629,7 @@ export default function SurveyWizardForm({ initialData, onSubmit, onCancel, user
       
       // Save last used surveyor name to local storage for automatic pre-fill!
       if (finalFormData.namaPendata && finalFormData.namaPendata.trim()) {
-        localStorage.setItem('dtsen_last_nama_pendata', finalFormData.namaPendata.trim());
+        safeStorage.setItem('dtsen_last_nama_pendata', finalFormData.namaPendata.trim());
       }
       
       onSubmit(finalFormData);

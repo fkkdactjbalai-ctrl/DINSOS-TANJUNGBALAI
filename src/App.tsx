@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Edit3, HeartHandshake, AlertCircle, BookmarkCheck, Database, LogOut, ShieldAlert, LayoutDashboard, UserCheck, FileText, Map, CloudOff, RefreshCw, Download, Upload, Calendar } from 'lucide-react';
 import { SurveyData } from './types';
+import { safeStorage } from './utils/storage';
 import Header from './components/Header';
 import SurveyWizardForm from './components/SurveyWizardForm';
 import DataSummaryTable from './components/DataSummaryTable';
@@ -39,13 +40,13 @@ interface UndoAction {
 
 export default function App() {
   const [userRole, setUserRole] = useState<'admin' | 'pendata' | null>(() => {
-    return localStorage.getItem('dtsen_role') as 'admin' | 'pendata' | null;
+    return safeStorage.getItem('dtsen_role') as 'admin' | 'pendata' | null;
   });
   const [username, setUsername] = useState<string>(() => {
-    return localStorage.getItem('dtsen_username') || '';
+    return safeStorage.getItem('dtsen_username') || '';
   });
   const [fullname, setFullname] = useState<string>(() => {
-    return localStorage.getItem('dtsen_fullname') || '';
+    return safeStorage.getItem('dtsen_fullname') || '';
   });
   const [surveys, setSurveys] = useState<SurveyData[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<SurveyData | null>(null);
@@ -116,10 +117,10 @@ export default function App() {
   };
 
   const handleLoginSuccess = (role: 'admin' | 'pendata', uname: string, fname: string) => {
-    localStorage.setItem('dtsen_role', role);
-    localStorage.setItem('dtsen_username', uname);
-    localStorage.setItem('dtsen_fullname', fname);
-    localStorage.setItem('dtsen_last_nama_pendata', fname);
+    safeStorage.setItem('dtsen_role', role);
+    safeStorage.setItem('dtsen_username', uname);
+    safeStorage.setItem('dtsen_fullname', fname);
+    safeStorage.setItem('dtsen_last_nama_pendata', fname);
     
     setUserRole(role);
     setUsername(uname);
@@ -128,9 +129,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('dtsen_role');
-    localStorage.removeItem('dtsen_username');
-    localStorage.removeItem('dtsen_fullname');
+    safeStorage.removeItem('dtsen_role');
+    safeStorage.removeItem('dtsen_username');
+    safeStorage.removeItem('dtsen_fullname');
     setUserRole(null);
     setUsername('');
     setFullname('');
@@ -138,7 +139,7 @@ export default function App() {
 
   const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwSZvmO0s3oWZSkMuEG7tvTZnIJMg6mSKkN9mWjVVNHQYfhd1Urvol18h5wtY8WMQ4IqQ/exec';
   const [syncUrl, setSyncUrl] = useState(() => {
-    const stored = localStorage.getItem('dtsen_sync_url');
+    const stored = safeStorage.getItem('dtsen_sync_url');
     // Auto-migrate from the old defaults to prevent user using outdated URL cached in browser
     if (
       !stored || 
@@ -148,34 +149,40 @@ export default function App() {
       stored === 'https://script.google.com/macros/s/AKfycbzRkb2HTPFyTc1XrlS77D5mtBmNRxs4RSD-67WQsjs4sDtwM_oLywREuwbKyWzSfvVvKA/exec' ||
       stored === 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec'
     ) {
-      localStorage.setItem('dtsen_sync_url', DEFAULT_SYNC_URL);
+      safeStorage.setItem('dtsen_sync_url', DEFAULT_SYNC_URL);
       return DEFAULT_SYNC_URL;
     }
     return stored;
   });
   const [isAutoSync, setIsAutoSync] = useState(() => {
-    const stored = localStorage.getItem('dtsen_auto_sync');
+    const stored = safeStorage.getItem('dtsen_auto_sync');
     return stored === null ? true : stored === 'true';
   });
 
   const updateSyncUrl = (url: string) => {
-    localStorage.setItem('dtsen_sync_url', url);
+    safeStorage.setItem('dtsen_sync_url', url);
     setSyncUrl(url);
   };
 
   const updateAutoSync = (enabled: boolean) => {
-    localStorage.setItem('dtsen_auto_sync', String(enabled));
+    safeStorage.setItem('dtsen_auto_sync', String(enabled));
     setIsAutoSync(enabled);
   };
 
   // Load from local storage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('sensus_surveys_v2');
+    const saved = safeStorage.getItem('sensus_surveys_v2');
     if (saved) {
       try {
-        setSurveys(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setSurveys(parsed);
+        } else {
+          setSurveys([]);
+        }
       } catch (e) {
         console.error('Gagal memuat database DTSEN lokal:', e);
+        setSurveys([]);
       }
     } else {
       // Pre-fill with empty array initially
@@ -191,23 +198,31 @@ export default function App() {
     const unsubscribe = subscribeToSurveys(userRole, fullname, (cloudSurveys) => {
       setSurveys(prev => {
         const mergedDict: { [id: string]: SurveyData } = {};
+        const prevArray = Array.isArray(prev) ? prev : [];
+        const cloudSurveysArray = Array.isArray(cloudSurveys) ? cloudSurveys : [];
         
         // Always preserve all local surveys to prevent any accidental data loss!
-        prev.forEach(s => {
-          mergedDict[s.id] = s;
+        prevArray.forEach(s => {
+          if (s && s.id) {
+            mergedDict[s.id] = s;
+          }
         });
 
         // Merge/update with cloud items, marking them as synced
-        cloudSurveys.forEach(s => {
-          mergedDict[s.id] = { ...s, synced: true };
+        cloudSurveysArray.forEach(s => {
+          if (s && s.id) {
+            mergedDict[s.id] = { ...s, synced: true };
+          }
         });
 
         // Convert back to sorted list (newest first, based on submittedAt)
         const mergedList = Object.values(mergedDict).sort((a, b) => {
-          return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+          const timeA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+          const timeB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+          return timeB - timeA;
         });
 
-        localStorage.setItem('sensus_surveys_v2', JSON.stringify(mergedList));
+        safeStorage.setItem('sensus_surveys_v2', JSON.stringify(mergedList));
         return mergedList;
       });
     });
@@ -312,8 +327,8 @@ export default function App() {
 
   const handleExportData = () => {
     try {
-      const surveysData = localStorage.getItem('sensus_surveys_v2') || '[]';
-      const offlineUsersData = localStorage.getItem('dtsen_offline_users') || '{}';
+      const surveysData = safeStorage.getItem('sensus_surveys_v2') || '[]';
+      const offlineUsersData = safeStorage.getItem('dtsen_offline_users') || '{}';
       
       const backupObject = {
         backupVersion: '2.0',
@@ -321,8 +336,8 @@ export default function App() {
         surveys: JSON.parse(surveysData),
         offlineUsers: JSON.parse(offlineUsersData),
         appSettings: {
-          syncUrl: localStorage.getItem('dtsen_sync_url') || '',
-          autoSync: localStorage.getItem('dtsen_auto_sync') !== 'false'
+          syncUrl: safeStorage.getItem('dtsen_sync_url') || '',
+          autoSync: safeStorage.getItem('dtsen_auto_sync') !== 'false'
         }
       };
 
@@ -363,20 +378,20 @@ export default function App() {
         }
 
         // Write to localStorage
-        localStorage.setItem('sensus_surveys_v2', JSON.stringify(restoredSurveys));
+        safeStorage.setItem('sensus_surveys_v2', JSON.stringify(restoredSurveys));
         setSurveys(restoredSurveys);
 
         if (parsedData.offlineUsers && typeof parsedData.offlineUsers === 'object') {
-          localStorage.setItem('dtsen_offline_users', JSON.stringify(parsedData.offlineUsers));
+          safeStorage.setItem('dtsen_offline_users', JSON.stringify(parsedData.offlineUsers));
         }
 
         if (parsedData.appSettings) {
           if (parsedData.appSettings.syncUrl) {
-            localStorage.setItem('dtsen_sync_url', parsedData.appSettings.syncUrl);
+            safeStorage.setItem('dtsen_sync_url', parsedData.appSettings.syncUrl);
             setSyncUrl(parsedData.appSettings.syncUrl);
           }
           if (parsedData.appSettings.autoSync !== undefined) {
-            localStorage.setItem('dtsen_auto_sync', String(parsedData.appSettings.autoSync));
+            safeStorage.setItem('dtsen_auto_sync', String(parsedData.appSettings.autoSync));
             setIsAutoSync(parsedData.appSettings.autoSync);
           }
         }
@@ -439,10 +454,10 @@ export default function App() {
     const fnameParam = params.get('fname');
 
     if (roleParam && unameParam && fnameParam && !userRole) {
-      localStorage.setItem('dtsen_role', roleParam);
-      localStorage.setItem('dtsen_username', unameParam);
-      localStorage.setItem('dtsen_fullname', fnameParam);
-      localStorage.setItem('dtsen_last_nama_pendata', fnameParam);
+      safeStorage.setItem('dtsen_role', roleParam);
+      safeStorage.setItem('dtsen_username', unameParam);
+      safeStorage.setItem('dtsen_fullname', fnameParam);
+      safeStorage.setItem('dtsen_last_nama_pendata', fnameParam);
       
       setUserRole(roleParam as 'admin' | 'pendata');
       setUsername(unameParam);
@@ -504,13 +519,14 @@ export default function App() {
           const res = await sendSurveyToGoogleAppsScript(syncUrl, s);
           if (res.success) {
             setSurveys(prev => {
-              const updated = prev.map(item => {
+              const prevArray = Array.isArray(prev) ? prev : [];
+              const updated = prevArray.map(item => {
                 if (item.id === s.id) {
                   return { ...item, synced: true, syncedAt: new Date().toISOString() };
                 }
                 return item;
               });
-              localStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
+              safeStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
               return updated;
             });
             showToast(`Sinkronisasi latar otomatis sukses untuk KK ${s.noKK}!`, 'success');
@@ -529,7 +545,7 @@ export default function App() {
 
   // Helper to save surveys list to LocalStorage
   const saveToLocalStorage = (updatedList: SurveyData[]) => {
-    localStorage.setItem('sensus_surveys_v2', JSON.stringify(updatedList));
+    safeStorage.setItem('sensus_surveys_v2', JSON.stringify(updatedList));
     setSurveys(updatedList);
   };
 
@@ -603,13 +619,14 @@ export default function App() {
     sendSurveyToGoogleAppsScript(syncUrl, finalSurveyToSync).then(res => {
       if (res.success) {
         setSurveys(prev => {
-          const updated = prev.map(item => {
+          const prevArray = Array.isArray(prev) ? prev : [];
+          const updated = prevArray.map(item => {
             if (item.id === targetSurveyId) {
               return { ...item, synced: true, syncedAt: new Date().toISOString() };
             }
             return item;
           });
-          localStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
+          safeStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
           return updated;
         });
         if (isFirebaseConfigured) {
@@ -652,13 +669,14 @@ export default function App() {
     const res = await sendSurveyToGoogleAppsScript(urlToUse, targetSurvey);
     if (res.success) {
       setSurveys(prev => {
-        const nextList = prev.map(s => {
+        const prevArray = Array.isArray(prev) ? prev : [];
+        const nextList = prevArray.map(s => {
           if (s.id === id) {
             return { ...s, synced: true, syncedAt: new Date().toISOString() };
           }
           return s;
         });
-        localStorage.setItem('sensus_surveys_v2', JSON.stringify(nextList));
+        safeStorage.setItem('sensus_surveys_v2', JSON.stringify(nextList));
         return nextList;
       });
       showToast(`Data KK ${targetSurvey.noKK} berhasil disinkronkan ke Google Sheets!`, 'success');
@@ -721,7 +739,7 @@ export default function App() {
     
     setIsPullingCloud(true);
     
-    const lastSync = forceFull ? undefined : (localStorage.getItem('dtsen_last_sync_timestamp') || undefined);
+    const lastSync = forceFull ? undefined : (safeStorage.getItem('dtsen_last_sync_timestamp') || undefined);
     
     if (lastSync) {
       showToast(`Menghubungi cloud untuk memuat perubahan data baru sejak ${new Date(lastSync).toLocaleTimeString('id-ID')} (Delta Sync)...`, 'info');
@@ -743,7 +761,7 @@ export default function App() {
             showToast('Tidak ada data sensus yang tersedia di cloud database.', 'info');
           }
           // Still update last sync timestamp to avoid missing any edge updates
-          localStorage.setItem('dtsen_last_sync_timestamp', syncStartTime);
+          safeStorage.setItem('dtsen_last_sync_timestamp', syncStartTime);
           setIsPullingCloud(false);
           return;
         }
@@ -751,33 +769,41 @@ export default function App() {
         setSurveys(prev => {
           // Map local surveys into a dictionary by ID
           const mergedDict: { [id: string]: SurveyData } = {};
+          const prevArray = Array.isArray(prev) ? prev : [];
+          const cloudSurveysArray = Array.isArray(cloudSurveys) ? cloudSurveys : [];
           
           // Seed with current local state
-          prev.forEach(s => {
-            mergedDict[s.id] = s;
+          prevArray.forEach(s => {
+            if (s && s.id) {
+              mergedDict[s.id] = s;
+            }
           });
 
           // Overwrite/insert or delete based on data fetched from Cloud
-          cloudSurveys.forEach(s => {
-            if ((s as any).deleted) {
-              delete mergedDict[s.id];
-            } else {
-              // Force status to be synced in local state since it came from cloud!
-              mergedDict[s.id] = { ...s, synced: true };
+          cloudSurveysArray.forEach(s => {
+            if (s && s.id) {
+              if ((s as any).deleted) {
+                delete mergedDict[s.id];
+              } else {
+                // Force status to be synced in local state since it came from cloud!
+                mergedDict[s.id] = { ...s, synced: true };
+              }
             }
           });
 
           // Convert back to sorted list (newest first, based on submittedAt)
           const mergedList = Object.values(mergedDict).sort((a, b) => {
-            return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+            const timeA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+            const timeB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+            return timeB - timeA;
           });
 
-          localStorage.setItem('sensus_surveys_v2', JSON.stringify(mergedList));
+          safeStorage.setItem('sensus_surveys_v2', JSON.stringify(mergedList));
           return mergedList;
         });
 
         // Store last sync time on success
-        localStorage.setItem('dtsen_last_sync_timestamp', syncStartTime);
+        safeStorage.setItem('dtsen_last_sync_timestamp', syncStartTime);
 
         const successMsg = lastSync
           ? `Delta Sinkronisasi Sukses! Berhasil menyelaraskan ${cloudSurveys.length} perubahan data sensus baru.`

@@ -10,6 +10,7 @@ import { SurveyData } from '../types';
 import { exportSurveysToCSV } from '../utils/csvExport';
 import { getGoogleAppsScriptTemplate } from '../utils/syncService';
 import { STATUS_PENDATAAN_OPTIONS } from '../data/options';
+import { safeStorage } from '../utils/storage';
 
 interface DataSummaryTableProps {
   surveys: SurveyData[];
@@ -80,12 +81,12 @@ export default function DataSummaryTable({
 
   // Delta Sync choice state
   const [pullMode, setPullMode] = useState<'delta' | 'full'>(() => {
-    return localStorage.getItem('dtsen_pull_mode') === 'full' ? 'full' : 'delta';
+    return safeStorage.getItem('dtsen_pull_mode') === 'full' ? 'full' : 'delta';
   });
 
   const changePullMode = (mode: 'delta' | 'full') => {
     setPullMode(mode);
-    localStorage.setItem('dtsen_pull_mode', mode);
+    safeStorage.setItem('dtsen_pull_mode', mode);
   };
 
   // Cloud Sync state variables
@@ -399,9 +400,9 @@ export default function DataSummaryTable({
                     : (pullMode === 'delta' ? 'Tarik Delta Data' : 'Tarik Sensus Penuh')
                   }
                 </button>
-                {localStorage.getItem('dtsen_last_sync_timestamp') && (
+                {safeStorage.getItem('dtsen_last_sync_timestamp') && (
                   <span className="text-[9px] text-slate-400 block text-center font-mono">
-                    Last: {new Date(localStorage.getItem('dtsen_last_sync_timestamp')!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ({pullMode === 'delta' ? 'Delta' : 'Penuh'})
+                    Last: {new Date(safeStorage.getItem('dtsen_last_sync_timestamp')!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ({pullMode === 'delta' ? 'Delta' : 'Penuh'})
                   </span>
                 )}
               </div>
