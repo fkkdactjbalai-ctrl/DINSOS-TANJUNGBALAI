@@ -149,20 +149,26 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 // Active session verification guarantee helper
-let isAuthPromise: Promise<any> | null = null;
+let activeAuthPromise: Promise<any> | null = null;
 export async function ensureAuthenticated() {
   if (!isFirebaseConfigured || !auth) {
     return { uid: 'offline_user', isAnonymous: true };
   }
   if (auth.currentUser) return auth.currentUser;
-  if (!isAuthPromise) {
-    isAuthPromise = signInAnonymously(auth).catch(err => {
-      console.warn("Failed to sign in anonymously. Proceeding as unauthenticated user.", err);
-      // Resolve instead of rethrowing, so Firestore operations can run under unauthenticated rules
-      return { uid: 'unauthenticated_user', isAnonymous: true };
-    });
+  if (!activeAuthPromise) {
+    activeAuthPromise = signInAnonymously(auth)
+      .then((cred) => {
+        activeAuthPromise = null;
+        return cred.user;
+      })
+      .catch(err => {
+        console.warn("Failed to sign in anonymously. Proceeding as unauthenticated user.", err);
+        activeAuthPromise = null;
+        // Return a fresh temporary unauthenticated object without keeping the promise cached forever
+        return { uid: 'unauthenticated_user', isAnonymous: true };
+      });
   }
-  return isAuthPromise;
+  return activeAuthPromise;
 }
 
 /**
@@ -447,7 +453,14 @@ export async function fetchSurveysFromGoogleAppsScript(
       surveysQuery = collection(db, 'surveys');
     }
 
-    const querySnapshot = await getDocs(surveysQuery);
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromServer(surveysQuery);
+    } catch (serverErr) {
+      console.warn("getDocsFromServer for surveys failed, falling back to standard getDocs:", serverErr);
+      querySnapshot = await getDocs(surveysQuery);
+    }
+
     const surveysCol: SurveyData[] = [];
     querySnapshot.forEach((doc) => {
       // Safely filter out the '_setup_metadata' control document
@@ -867,7 +880,16 @@ export async function fetchAllUsersFromFirestore(): Promise<any[]> {
   }
   try {
     await ensureAuthenticated();
-    const querySnapshot = await getDocs(collection(db, 'users'));
+    
+    // Force direct fetch from server to get registrations from other devices
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromServer(collection(db, 'users'));
+    } catch (serverErr) {
+      console.warn("getDocsFromServer for all users failed, falling back to standard getDocs:", serverErr);
+      querySnapshot = await getDocs(collection(db, 'users'));
+    }
+
     const list: any[] = [];
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
@@ -876,6 +898,22 @@ export async function fetchAllUsersFromFirestore(): Promise<any[]> {
         username: data.username || docSnap.id
       });
     });
+
+    // Update local cache with latest data from server
+    try {
+      const offlineUsersJson = localStorage.getItem('dtsen_offline_users');
+      const offlineUsers = offlineUsersJson ? JSON.parse(offlineUsersJson) : {};
+      list.forEach((u: any) => {
+        const uName = (u.username || '').toLowerCase().trim();
+        if (uName) {
+          offlineUsers[uName] = { ...offlineUsers[uName], ...u };
+        }
+      });
+      localStorage.setItem('dtsen_offline_users', JSON.stringify(offlineUsers));
+    } catch (cacheErr) {
+      console.warn("Failed to update offline users cache during fetchAllUsers:", cacheErr);
+    }
+
     return list;
   } catch (error) {
     console.warn("Unable to fetch all users online, loading offline local list:", error);
