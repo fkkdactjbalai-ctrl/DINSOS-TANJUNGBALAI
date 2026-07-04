@@ -1034,9 +1034,113 @@ export function getGoogleAppsScriptTemplate(): string {
  * GOOGLE APPS SCRIPT - SINKRONISASI INTERAKTIF DTSEN TANJUNGBALAI
  * 
  * Petunjuk Pemasangan:
- * 1. Buka Google Sheet baru, ganti nama Sheet menjadi "DTSEN_Data".
- * ...
- */`;
+ * 1. Buka file Google Sheets baru.
+ * 2. Ganti nama lembar kerja (sheet tab) pertama menjadi "DTSEN_Data".
+ * 3. Pilih menu "Ekstensi" (Extensions) >> klik "Apps Script".
+ * 4. Hapus semua baris kode bawaan di editor, kemudian tempel (paste) seluruh kode script ini.
+ * 5. Klik tombol "Simpan" (ikon disket di atas).
+ * 6. Klik "Terapkan" (Deploy) >> pilih "Penerapan baru" (New deployment).
+ * 7. Klik tombol roda gigi di samping 'Pilih jenis' >> pilih "Aplikasi Web" (Web app).
+ *    - Jalankan sebagai (Execute as): Pilih "Diri Anda sendiri (Email Anda)"
+ *    - Siapa yang memiliki akses (Who has access): Wajib pilih "Siapa saja" (Anyone)
+ * 8. Klik "Terapkan" >> Tekan tombol "Berikan Akses" (Authorize Access) >> Masuk dengan akun Google Anda >> Klik "Lanjutan" (Advanced) >> Klik "Buka Proyek Tanpa Judul (tidak aman)" untuk memberikan izin penulisan data.
+ * 9. Salin URL Aplikasi Web yang dihasilkan (berawalan https://script.google.com/macros/s/...) dan masukkan ke dalam isian URL Sinkronisasi Google Sheets di aplikasi.
+ */
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, message: "Tidak ada data yang diterima." }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var payload = JSON.parse(e.postData.contents);
+    
+    if (payload.action === 'save_dtsen_data') {
+      var flatData = payload.flat;
+      if (!flatData) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, message: "Struktur data flat tidak ditemukan." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName("DTSEN_Data");
+      if (!sheet) {
+        sheet = ss.insertSheet("DTSEN_Data");
+      }
+      
+      // Definisikan urutan kolom di spreadsheet
+      var headers = [
+        "id", "submittedAt", "namaPendata", "noKK", "namaResponden", 
+        "kecamatan", "kelurahan", "alamat", "statusKepemilikanRumah", 
+        "buktiKepemilikanTanah", "luasLantai", "jenisLantai", "jenisDinding", 
+        "jenisAtap", "sumberAirMinum", "jarakAirMinum", "sumberPenerangan", 
+        "dayaListrik", "noMeteranPelanggan", "bahanBakarMemasak", "fasilitasBab", 
+        "jenisKloset", "pembuanganAkhirTinja", "kondisiGiziAnak", "penyakitKronis", 
+        "jaminanKesehatan", "programBantuan", "asetBergerak", "asetTidakBergerak", 
+        "jumlahTernak", "aksesInternetKeluarga", "rekeningDompetDigital", 
+        "pmksTerdapat", "pmksJenis", "jenisBantuanDiinginkan", "catatan", 
+        "jumlahAnggotaKeluarga", "daftarAnggotaKeluarga"
+      ];
+      
+      // Jika sheet masih baru dan kosong, tulis baris header
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(headers);
+        var headerRange = sheet.getRange(1, 1, 1, headers.length);
+        headerRange.setFontWeight("bold");
+        headerRange.setBackground("#4F46E5"); // Indigo-600
+        headerRange.setFontColor("#FFFFFF");
+        sheet.setFrozenRows(1);
+      }
+      
+      // Cek apakah data dengan ID survey ini sudah pernah terekam sebelumnya (untuk diperbarui)
+      var lastRow = sheet.getLastRow();
+      var existingRowIndex = -1;
+      
+      if (lastRow > 1) {
+        var idValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (var i = 0; i < idValues.length; i++) {
+          if (idValues[i][0] === flatData.id) {
+            existingRowIndex = i + 2; // +2 karena baris data dimulai dari baris ke-2
+            break;
+          }
+        }
+      }
+      
+      // Siapkan baris data sesuai dengan urutan headers
+      var rowData = headers.map(function(header) {
+        var val = flatData[header];
+        return val !== undefined && val !== null ? val : "";
+      });
+      
+      if (existingRowIndex !== -1) {
+        // Update baris lama yang sudah ada
+        var range = sheet.getRange(existingRowIndex, 1, 1, headers.length);
+        range.setValues([rowData]);
+      } else {
+        // Append baris baru jika belum terdaftar
+        sheet.appendRow(rowData);
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({ 
+        success: true, 
+        message: "Data keluarga berhasil tersinkronisasi ke Google Sheets!" 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: "Aksi tidak dikenali." }))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput("Endpoint Web App Sinkronisasi Google Sheets DTSEN Tanjungbalai Aktif!")
+    .setMimeType(ContentService.MimeType.TEXT);
+}`;
 }
 
 /**

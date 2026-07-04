@@ -137,7 +137,7 @@ export default function App() {
     setFullname('');
   };
 
-  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwSZvmO0s3oWZSkMuEG7tvTZnIJMg6mSKkN9mWjVVNHQYfhd1Urvol18h5wtY8WMQ4IqQ/exec';
+  const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzhKQssWLHiL1If4NDk4k_PgP6VEbPtcv-SDCOHJsXugoQ6-q0_KPTRwLUOWRdGq8OV/exec';
   const [syncUrl, setSyncUrl] = useState(() => {
     const stored = safeStorage.getItem('dtsen_sync_url');
     // Auto-migrate from the old defaults to prevent user using outdated URL cached in browser
@@ -146,8 +146,10 @@ export default function App() {
       stored.includes('AKfycbzxwm') || 
       stored.includes('AKfycbzE3mom') || 
       stored.includes('AKfycbzRkb2H') ||
+      stored.includes('AKfycbwSZvmO0s3oWZSkMuEG7tvTZnIJMg6mSKkN9mWjVVNHQYfhd1Urvol18h5wtY8WMQ4IqQ') ||
       stored === 'https://script.google.com/macros/s/AKfycbzRkb2HTPFyTc1XrlS77D5mtBmNRxs4RSD-67WQsjs4sDtwM_oLywREuwbKyWzSfvVvKA/exec' ||
-      stored === 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec'
+      stored === 'https://script.google.com/macros/s/AKfycbzE3momFXoHolsyphCD6E95pJaeZO85H4CShW_WrmIGXID38ZdTByxgxJHXCpXI2xUQ6A/exec' ||
+      stored === 'https://script.google.com/macros/s/AKfycbwSZvmO0s3oWZSkMuEG7tvTZnIJMg6mSKkN9mWjVVNHQYfhd1Urvol18h5wtY8WMQ4IqQ/exec'
     ) {
       safeStorage.setItem('dtsen_sync_url', DEFAULT_SYNC_URL);
       return DEFAULT_SYNC_URL;
