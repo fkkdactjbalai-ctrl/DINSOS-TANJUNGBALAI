@@ -138,7 +138,7 @@ export interface FirestoreErrorInfo {
  * Handles errors arising from Firestore security rule check failures, conformant with high-stakes skill mandates.
  */
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  checkIfQuotaError(error);
+  const isQuota = checkIfQuotaError(error);
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: auth ? {
@@ -155,7 +155,9 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  if (isFirebaseConfigured) {
+  if (isQuota) {
+    console.warn('Firestore Quota Exceeded (Graceful Fallback to Offline Mode): ', JSON.stringify(errInfo));
+  } else if (isFirebaseConfigured) {
     console.error('Firestore Error: ', JSON.stringify(errInfo));
   } else {
     console.warn('Firestore Fallback (Offline Mode): ', errInfo.error);
@@ -740,8 +742,12 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
 
     return null;
   } catch (error) {
-    console.error("Error fetching user from Firestore:", error);
-    checkIfQuotaError(error);
+    const isQuota = checkIfQuotaError(error);
+    if (isQuota) {
+      console.warn("Quota exceeded fetching user from Firestore:", error);
+    } else {
+      console.error("Error fetching user from Firestore:", error);
+    }
     
     // Fallback to offline local users
     const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
@@ -884,8 +890,12 @@ export async function saveUserToFirestore(username: string, userData: any): Prom
     await setDoc(doc(db, 'users', safeUsername), dataWithUsername, { merge: true });
     return true;
   } catch (error) {
-    console.error("Error saving user to Firestore: ", error);
-    checkIfQuotaError(error);
+    const isQuota = checkIfQuotaError(error);
+    if (isQuota) {
+      console.warn("Quota exceeded saving user to Firestore: ", error);
+    } else {
+      console.error("Error saving user to Firestore: ", error);
+    }
     handleFirestoreError(error, OperationType.WRITE, `users/${safeUsername}`);
     return false;
   }
@@ -975,8 +985,12 @@ export async function deleteUserFromFirestore(username: string): Promise<boolean
     await deleteDoc(doc(db, 'users', safeUsername));
     return true;
   } catch (error) {
-    console.error("Error deleting user from Firestore:", error);
-    checkIfQuotaError(error);
+    const isQuota = checkIfQuotaError(error);
+    if (isQuota) {
+      console.warn("Quota exceeded deleting user from Firestore:", error);
+    } else {
+      console.error("Error deleting user from Firestore:", error);
+    }
     return false;
   }
 }
@@ -1066,8 +1080,12 @@ export async function hardDeleteSurveysFromFirestore(ids: string[]): Promise<{ s
     await Promise.all(promises);
     return { success: true, count: deletedCount };
   } catch (error) {
-    console.error("Error hard deleting surveys from Firestore:", error);
-    checkIfQuotaError(error);
+    const isQuota = checkIfQuotaError(error);
+    if (isQuota) {
+      console.warn("Quota exceeded hard deleting surveys from Firestore:", error);
+    } else {
+      console.error("Error hard deleting surveys from Firestore:", error);
+    }
     return { success: false, count: 0, error: (error as Error).message };
   }
 }
