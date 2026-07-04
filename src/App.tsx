@@ -18,7 +18,8 @@ import {
   isFirebaseConfigured,
   isFirestoreQuotaExceeded,
   registerQuotaExceededCallback,
-  fetchUserDirectlyFromServer
+  fetchUserDirectlyFromServer,
+  setFirestoreQuotaExceeded
 } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
@@ -968,26 +969,28 @@ export default function App() {
       <Header />
 
       {quotaExceeded && (
-        <div className="bg-amber-500 text-slate-950 px-4 py-3 sm:px-6 lg:px-8 border-b border-amber-600 shadow-sm non-printable animate-pulse-subtle">
+        <div className="bg-amber-500 text-slate-950 px-4 py-3 sm:px-6 lg:px-8 border-b border-amber-600 shadow-sm non-printable">
           <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <AlertCircle className="h-5 w-5 text-slate-950 shrink-0 animate-bounce" />
               <div className="text-xs sm:text-sm font-semibold">
-                <span className="font-extrabold">MODE LOKAL/OFFLINE AKTIF:</span> Kuota harian database cloud Google Firestore telah terlampaui. Semua data Anda dimuat &amp; disimpan secara mandiri dan aman di penyimpanan lokal peramban perangkat ini. Anda dapat terus melakukan pendataan dengan lancar!
-                <span className="block mt-1 sm:inline sm:mt-0 sm:ml-2">
-                  <a 
-                    href="https://console.firebase.google.com/project/sturdy-factor-m6m9v/firestore/databases/ai-studio-sensuskeluarga-227ee858-2718-4d4c-beee-3c7eb807c0e2/data?openUpgradeDialog=true" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="underline font-extrabold text-slate-950 hover:text-slate-800 transition-colors inline-flex items-center gap-1"
-                  >
-                    Buka Firebase Console & Upgrade Database Anda &rarr;
-                  </a>
-                </span>
+                <span className="font-extrabold">MODE LOKAL/OFFLINE AKTIF:</span> Kuota harian database cloud Google Firestore telah terlampaui atau koneksi terganggu. Semua data Anda dimuat &amp; disimpan secara mandiri dan aman di penyimpanan lokal peramban perangkat ini. Anda dapat terus melakukan pendataan dengan lancar!
               </div>
             </div>
-            <div className="text-[10px] font-mono bg-slate-950/20 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider shrink-0">
-              Offline Cache Active
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setFirestoreQuotaExceeded(false);
+                  window.location.reload();
+                }}
+                className="px-3 py-1 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
+              >
+                Coba Hubungkan Ulang
+              </button>
+              <div className="text-[10px] font-mono bg-slate-950/20 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider shrink-0">
+                Offline Active
+              </div>
             </div>
           </div>
         </div>

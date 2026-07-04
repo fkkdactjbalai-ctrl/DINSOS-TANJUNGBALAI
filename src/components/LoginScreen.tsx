@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, UserCheck, KeyRound, AlertCircle, Eye, EyeOff, Lock, HeartHandshake, UserPlus, LogIn, ChevronRight } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { db, isFirebaseConfigured, fetchUserFromFirestore, fetchUserDirectlyFromServer, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback } from '../utils/syncService';
+import { db, isFirebaseConfigured, fetchUserFromFirestore, fetchUserDirectlyFromServer, saveUserToFirestore, isFirestoreQuotaExceeded, registerQuotaExceededCallback, setFirestoreQuotaExceeded } from '../utils/syncService';
 import { safeStorage } from '../utils/storage';
 
 interface LoginScreenProps {
@@ -516,12 +516,26 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         {/* Form Body */}
         <div className="p-6 sm:p-8 space-y-5">
           {quotaExceeded && (
-            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-800 rounded-2xl text-[11px] leading-relaxed flex items-start gap-2.5 animate-pulse-subtle">
-              <AlertCircle className="h-4.5 w-4.5 shrink-0 text-amber-600 mt-0.5" />
-              <div>
-                <span className="font-bold block text-amber-900">Mode Lokal Aktif (Kuota Cloud Terlampaui)</span>
-                Sensus cloud sedang melebihi batas kuota gratis harian. 
-                Sistem telah beralih sepenuhnya ke **Penyimpanan Lokal (Offline)**. Anda tetap bisa Masuk/Daftar Akun dan mendata dengan aman secara lokal di perangkat ini!
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-800 rounded-2xl text-[11px] leading-relaxed flex flex-col gap-2 animate-pulse-subtle">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="h-4.5 w-4.5 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <span className="font-bold block text-amber-900">Mode Lokal Aktif (Kuota Cloud Terlampaui)</span>
+                  Sensus cloud sedang melebihi batas kuota gratis harian atau terjadi gangguan koneksi sementara. 
+                  Sistem telah beralih sepenuhnya ke **Penyimpanan Lokal (Offline)**. Anda tetap bisa Masuk/Daftar Akun dan mendata dengan aman secara lokal di perangkat ini!
+                </div>
+              </div>
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFirestoreQuotaExceeded(false);
+                    window.location.reload();
+                  }}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[10px] transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  Coba Hubungkan Ulang Cloud
+                </button>
               </div>
             </div>
           )}
