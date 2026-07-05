@@ -19,7 +19,9 @@ import {
   isFirestoreQuotaExceeded,
   registerQuotaExceededCallback,
   fetchUserDirectlyFromServer,
-  setFirestoreQuotaExceeded
+  setFirestoreQuotaExceeded,
+  fetchGlobalSyncUrl,
+  saveGlobalSyncUrl
 } from './utils/syncService';
 import LoginScreen from './components/LoginScreen';
 import VillageDataChart from './components/VillageDataChart';
@@ -162,9 +164,22 @@ export default function App() {
     return stored === null ? true : stored === 'true';
   });
 
-  const updateSyncUrl = (url: string) => {
+  const updateSyncUrl = async (url: string) => {
     safeStorage.setItem('dtsen_sync_url', url);
     setSyncUrl(url);
+    if (userRole === 'admin') {
+      try {
+        const res = await saveGlobalSyncUrl(url, fullname || username || 'Admin');
+        if (res.success) {
+          showToast('URL Apps Script berhasil disimpan secara global di Firestore!', 'success');
+        } else {
+          showToast(`URL lokal disimpan, tapi gagal menyimpan ke Firestore secara global: ${res.error}`, 'danger');
+        }
+      } catch (err: any) {
+        console.warn('Gagal menyimpan URL Apps Script ke Firestore:', err);
+        showToast(`Gagal menyimpan URL ke Firestore: ${err?.message || err}`, 'danger');
+      }
+    }
   };
 
   const updateAutoSync = (enabled: boolean) => {
@@ -191,6 +206,29 @@ export default function App() {
       // Pre-fill with empty array initially
       setSurveys([]);
     }
+  }, []);
+
+  // Fetch global Apps Script URL from Firestore settings/global on startup
+  useEffect(() => {
+    let active = true;
+    const loadGlobalSettings = async () => {
+      if (isFirebaseConfigured) {
+        try {
+          const globalUrl = await fetchGlobalSyncUrl();
+          if (globalUrl && active) {
+            safeStorage.setItem('dtsen_sync_url', globalUrl);
+            setSyncUrl(globalUrl);
+            console.log('Successfully loaded global Apps Script URL from Firestore:', globalUrl);
+          }
+        } catch (error) {
+          console.warn('Could not load global Apps Script URL from Firestore:', error);
+        }
+      }
+    };
+    loadGlobalSettings();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Configure real-time active listener sync across devices

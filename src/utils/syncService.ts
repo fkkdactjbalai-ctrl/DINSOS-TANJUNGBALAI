@@ -1194,3 +1194,50 @@ export async function hardDeleteSurveysFromFirestore(ids: string[]): Promise<{ s
   }
 }
 
+/**
+ * Fetches the global Google Apps Script Sync URL from Firestore global settings document.
+ */
+export async function fetchGlobalSyncUrl(): Promise<string | null> {
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    return null;
+  }
+  try {
+    await ensureAuthenticated();
+    const docRef = doc(db, 'settings', 'global');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return data.syncUrl || null;
+    }
+    return null;
+  } catch (error) {
+    console.warn("Unable to fetch global syncUrl from Firestore:", error);
+    checkIfQuotaError(error);
+    return null;
+  }
+}
+
+/**
+ * Saves the global Google Apps Script Sync URL to Firestore global settings document.
+ */
+export async function saveGlobalSyncUrl(url: string, updatedBy: string): Promise<{ success: boolean; error?: string }> {
+  if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
+    return { success: false, error: "Firebase tidak terkonfigurasi atau kuota terlampaui." };
+  }
+  try {
+    await ensureAuthenticated();
+    const docRef = doc(db, 'settings', 'global');
+    await setDoc(docRef, {
+      syncUrl: url,
+      updatedAt: new Date().toISOString(),
+      updatedBy: updatedBy
+    }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving global syncUrl to Firestore:", error);
+    checkIfQuotaError(error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+
