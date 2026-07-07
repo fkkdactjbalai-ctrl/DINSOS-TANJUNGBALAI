@@ -570,7 +570,7 @@ export default function App() {
               safeStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
               return updated;
             });
-            showToast(`Sinkronisasi latar otomatis sukses untuk KK ${s.noKK}!`, 'success');
+            showToast(res.message || `Sinkronisasi latar otomatis sukses untuk KK ${s.noKK}!`, 'success');
           }
         } catch (err) {
           console.error(`Gagal sinkron latar KK ${s.noKK}:`, err);
@@ -670,10 +670,12 @@ export default function App() {
           safeStorage.setItem('sensus_surveys_v2', JSON.stringify(updated));
           return updated;
         });
-        if (isFirebaseConfigured) {
+        if (res.message) {
+          showToast(res.message, 'success');
+        } else if (isFirebaseConfigured) {
           showToast(`Sinkronisasi cloud otomatis sukses untuk No KK ${finalSurveyToSync.noKK}!`, 'success');
         } else if (syncUrl && syncUrl.trim().startsWith('http')) {
-          showToast(`Berhasil tersinkronisasi ke Google Sheets untuk No KK ${finalSurveyToSync.noKK}!`, 'success');
+          showToast(`Berhasil tersinkronisasi ke Google Sheets (Backup Utama) untuk No KK ${finalSurveyToSync.noKK}!`, 'success');
         }
       } else {
         showToast(`Tersimpan lokal. Antrean sinkronisasi cloud: ${formatErrorMessage(res.message)}`, 'info');
@@ -720,7 +722,7 @@ export default function App() {
         safeStorage.setItem('sensus_surveys_v2', JSON.stringify(nextList));
         return nextList;
       });
-      showToast(`Data KK ${targetSurvey.noKK} berhasil disinkronkan ke Google Sheets!`, 'success');
+      showToast(res.message || `Data KK ${targetSurvey.noKK} berhasil disinkronkan ke Google Sheets!`, 'success');
     } else {
       showToast(`Gagal menyinkronkan data KK ${targetSurvey.noKK}: ${formatErrorMessage(res.message)}`, 'danger');
     }

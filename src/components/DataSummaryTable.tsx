@@ -311,17 +311,17 @@ export default function DataSummaryTable({
       <div className="bg-slate-50/60 border border-slate-100 rounded-2xl p-4 sm:p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-50 text-indigo-700 rounded-xl">
-              <CloudLightning className="h-5 w-5 animate-pulse" />
+            <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
+              <FileSpreadsheet className="h-5 w-5" />
             </div>
             <div>
               <h4 className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
-                Sinkronisasi Cloud &amp; Google Sheets
-                <span className="text-[9px] bg-green-50 text-green-700 font-bold px-1.5 py-0.5 rounded border border-green-200">
-                  DTSEN Aktif
+                Google Sheets / Apps Script (Backup Utama)
+                <span className="text-[9px] bg-green-50 text-green-700 font-bold px-1.5 py-0.5 rounded border border-green-200 animate-pulse">
+                  Backup Utama Aktif
                 </span>
               </h4>
-              <p className="text-[11px] text-slate-500">Hubungkan database lokal browser dengan Google Sheet spreadsheet melalui Google Apps Script.</p>
+              <p className="text-[11px] text-slate-500">Gunakan Google Sheets dan Apps Script sebagai platform pencadangan utama mandiri yang sangat aman dan hemat kuota cloud Anda.</p>
             </div>
           </div>
 

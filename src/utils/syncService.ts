@@ -224,10 +224,18 @@ export async function setupSurveysCollection(): Promise<boolean> {
 // Dry-run connection validation and surveys collection setup
 async function validateFirestoreConnection() {
   if (!isFirebaseConfigured || !db) return;
+  // Use session storage check to avoid running connection test and setupSurveysCollection on every bundle load
   try {
+    const isSessionValidated = typeof window !== 'undefined' && window.sessionStorage && window.sessionStorage.getItem('dtsen_connection_validated');
+    if (isSessionValidated === 'true') {
+      return;
+    }
     await ensureAuthenticated();
     await getDocFromServer(doc(db, 'test', 'connection')).catch(() => {});
     await setupSurveysCollection();
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem('dtsen_connection_validated', 'true');
+    }
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn("Please check your Firebase configuration or network connections.");
@@ -385,6 +393,7 @@ export async function sendSurveyToGoogleAppsScript(
 
     await setDoc(surveyDocRef, dataToSave);
 
+    let hasBackedUpToSheets = false;
     // Optional legacy backup connection to GAS Sheet if user provided custom URL
     if (url && url.trim().startsWith('http') && !url.includes('AKfycbzRkb2H') && !url.includes('AKfycbzE3mom')) {
       try {
@@ -408,6 +417,7 @@ export async function sendSurveyToGoogleAppsScript(
           },
           body: JSON.stringify(payload)
         });
+        hasBackedUpToSheets = true;
       } catch (gasErr) {
         console.warn("Spreadsheet sheets backup sync unsuccessful:", gasErr);
       }
@@ -415,7 +425,9 @@ export async function sendSurveyToGoogleAppsScript(
 
     return {
       success: true,
-      message: 'Berhasil tersimpan dan tersinkronisasi di Firestore Cloud Database.'
+      message: hasBackedUpToSheets 
+        ? 'Berhasil tersimpan di Firestore & dicadangkan ke Google Sheets (Backup Utama)!'
+        : 'Berhasil tersimpan dan tersinkronisasi di Firestore Cloud Database.'
     };
   } catch (error) {
     try {
@@ -776,6 +788,8 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
   }
 }
 
+const userServerFetchCache = new Map<string, { data: any; timestamp: number }>();
+
 /**
  * Fetches a user document directly from the Cloud Firestore server without offline cache fallback.
  * Returns null if not found on the server, throws error if connection fails.
@@ -783,6 +797,14 @@ export async function fetchUserFromFirestore(username: string): Promise<any | nu
 export async function fetchUserDirectlyFromServer(username: string): Promise<any | null> {
   const safeUsername = (username || '').toLowerCase().trim();
   if (!safeUsername) return null;
+
+  const now = Date.now();
+  const cached = userServerFetchCache.get(safeUsername);
+  // Cache for 15 minutes (900000 ms) to avoid redundant reads
+  if (cached && (now - cached.timestamp < 15 * 60 * 1000)) {
+    console.log(`Using server user fetch cache for "${safeUsername}"`);
+    return cached.data;
+  }
 
   if (!isFirebaseConfigured || !db || firestoreQuotaExceeded) {
     throw new Error("Cloud database is offline, unconfigured, or quota has been exceeded.");
@@ -801,6 +823,8 @@ export async function fetchUserDirectlyFromServer(username: string): Promise<any
 
   if (userDoc.exists()) {
     const data = userDoc.data();
+    // Cache in memory
+    userServerFetchCache.set(safeUsername, { data, timestamp: now });
     // Sync to local cache
     try {
       const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
@@ -845,6 +869,8 @@ export async function fetchUserDirectlyFromServer(username: string): Promise<any
   });
 
   if (matchedUser) {
+    // Cache in memory
+    userServerFetchCache.set(safeUsername, { data: matchedUser, timestamp: now });
     // Sync to local cache
     try {
       const offlineUsersJson = safeStorage.getItem('dtsen_offline_users');
@@ -860,6 +886,8 @@ export async function fetchUserDirectlyFromServer(username: string): Promise<any
     return matchedUser;
   }
 
+  // Cache "not found" in memory too to avoid constantly querying
+  userServerFetchCache.set(safeUsername, { data: null, timestamp: now });
   return null;
 }
 
